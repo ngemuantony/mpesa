@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+
+{% block title %}Transaction Details{% endblock %}
+
+{% block content %}
+<div class="text-center mb-5">
+    <div class="mb-4">
+        {% if transaction.is_successful %}
+            <div class="status-success">
+                <i class="fas fa-check-circle fa-4x mb-3"></i>
+            </div>
+            <h3 class="text-success fw-bold">Payment Successful</h3>
+        {% elif transaction.is_pending %}
+            <div class="status-pending">
+                <i class="fas fa-clock fa-4x mb-3"></i>
+            </div>
+            <h3 class="text-warning fw-bold">Payment Pending</h3>
+        {% else %}
+            <div class="status-failed">
+                <i class="fas fa-times-circle fa-4x mb-3"></i>
+            </div>
+            <h3 class="text-danger fw-bold">Payment Failed</h3>
+        {% endif %}
+    </div>
+    <p class="text-muted">Transaction completed on {{ transaction.created|date:"M d, Y \a\t H:i" }}</p>
+</div>
+
+<div class="row g-4 mb-5">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header bg-light">
+                <h6 class="mb-0 fw-bold">
+                    <i class="fas fa-receipt me-2 text-primary"></i>
+                    Payment Details
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Amount</span>
+                            <span class="fw-bold fs-5 text-success">KES {{ transaction.amount|floatformat:0 }}</span>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Phone Number</span>
+                            <span class="fw-semibold">{{ transaction.phone_number }}</span>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Reference</span>
+                            <span class="fw-semibold">{{ transaction.reference|default:"—" }}</span>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <span class="text-muted">Description</span>
+                            <span class="fw-semibold text-end">{{ transaction.description|default:"—" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header bg-light">
+                <h6 class="mb-0 fw-bold">
+                    <i class="fas fa-info-circle me-2 text-info"></i>
+                    Transaction Info
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Status</span>
+                            {% if transaction.is_successful %}
+                                <span class="badge bg-success fs-6">
+                                    <i class="fas fa-check me-1"></i>Successful
+                                </span>
+                            {% elif transaction.is_pending %}
+                                <span class="badge bg-warning fs-6">
+                                    <i class="fas fa-clock me-1"></i>Pending
+                                </span>
+                            {% else %}
+                                <span class="badge bg-danger fs-6">
+                                    <i class="fas fa-times me-1"></i>Failed
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Receipt Number</span>
+                            <span class="fw-semibold">{{ transaction.receipt_no|default:"—" }}</span>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Transaction ID</span>
+                            <span class="fw-semibold font-monospace small">{{ transaction.checkout_request_id|slice:":15" }}...</span>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Last Updated</span>
+                            <span class="fw-semibold">{{ transaction.updated_at|date:"M d, H:i" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-grid gap-3">
+    <a href="{% url 'payment_form' %}" class="btn btn-mpesa btn-lg">
+        <i class="fas fa-plus me-2"></i>Make Another Payment
+    </a>
+    
+    {% if transaction.is_successful %}
+    <button class="btn btn-outline-secondary" onclick="window.print()">
+        <i class="fas fa-print me-2"></i>Print Receipt
+    </button>
+    {% endif %}
+</div>
+
+<style>
+@media print {
+    .btn, .card-header { display: none !important; }
+    .card { border: 1px solid #ddd !important; box-shadow: none !important; }
+    body { background: white !important; }
+}
+</style>
+{% endblock %}

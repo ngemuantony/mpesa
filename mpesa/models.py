@@ -15,6 +15,7 @@ class Transaction(models.Model):
     status = models.CharField(max_length=15, choices=STATUS, default=1)
     receipt_no = models.CharField(max_length=200, blank=True, null=True)
     created = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     ip = models.CharField(max_length=200, blank=True, null=True)
 
     def __unicode__(self):

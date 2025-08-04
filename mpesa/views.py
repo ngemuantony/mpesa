@@ -1,6 +1,7 @@
 import json
 import logging
 
+from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.decorators import authentication_classes, permission_classes
@@ -18,6 +19,23 @@ def get_gateway():
     if not hasattr(get_gateway, '_gateway'):
         get_gateway._gateway = MpesaGateWay()
     return get_gateway._gateway
+
+
+def payment_form(request):
+    """Render the payment form template"""
+    return render(request, 'payment_form.html')
+
+
+def transaction_status(request, checkout_request_id):
+    """View to display transaction status"""
+    try:
+        from .models import Transaction
+        transaction = Transaction.objects.get(checkout_request_id=checkout_request_id)
+        return render(request, 'transaction_status.html', {'transaction': transaction})
+    except Transaction.DoesNotExist:
+        return render(request, 'payment_form.html', {
+            'error': 'Transaction not found'
+        })
 
 
 @authentication_classes([])

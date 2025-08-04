@@ -1,0 +1,632 @@
+{% extends 'base.html' %}
+
+{% block title %}M-Pesa Payment - Checkout{% endblock %}
+
+{% block content %}
+<form id="payment-form" class="needs-validation" novalidate>
+    {% csrf_token %}
+    <div class="row g-4">
+        <div class="col-12">
+            <label for="phone_number" class="form-label">
+                <i class="fas fa-phone"></i> Phone Number
+            </label>
+            <input type="tel" class="form-control form-control-lg" id="phone_number" 
+                   name="phone_number" placeholder="0712 345 678" required>
+            <div class="form-text">Enter your phone number (07XX XXX XXX, 01XX XXX XXX, or +254 XXX XXX XXX)</div>
+            <div class="invalid-feedback">Please enter a valid phone number</div>
+        </div>
+        
+        <div class="col-12">
+            <label for="amount" class="form-label">
+                <i class="fas fa-money-bill-wave"></i> Amount
+            </label>
+            <div class="input-group input-group-lg">
+                <span class="input-group-text">KES</span>
+                <input type="number" class="form-control" id="amount" 
+                       name="amount" min="1" max="300000" placeholder="100" required>
+            </div>
+            <div class="form-text">Amount between KES 1 - 300,000</div>
+            <div class="invalid-feedback">Please enter a valid amount</div>
+        </div>
+        
+        <div class="col-md-6">
+            <label for="reference" class="form-label">
+                <i class="fas fa-hashtag"></i> Reference
+            </label>
+            <input type="text" class="form-control form-control-lg" id="reference" 
+                   name="reference" placeholder="INV001" maxlength="40">
+            <div class="form-text">Optional payment reference</div>
+        </div>
+        
+        <div class="col-md-6">
+            <label for="description" class="form-label">
+                <i class="fas fa-comment-alt"></i> Description
+            </label>
+            <input type="text" class="form-control form-control-lg" id="description" 
+                   name="description" placeholder="Payment for..." maxlength="100">
+            <div class="form-text">What is this payment for?</div>
+        </div>
+    </div>
+    
+    <div class="d-grid mt-5">
+        <button type="submit" class="btn btn-mpesa btn-lg" id="pay-btn">
+            <i class="fas fa-credit-card me-2"></i>
+            <span>Pay with M-Pesa</span>
+        </button>
+    </div>
+    
+    <div class="text-center mt-4">
+        <small class="text-muted">
+            <i class="fas fa-shield-alt me-1"></i>
+            Secured by 256-bit SSL encryption
+        </small>
+    </div>
+</form>
+
+<!-- Payment Status Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-mobile-alt me-2"></i>
+                    Payment Status
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div id="status-content">
+                    <!-- Status content will be dynamically inserted here -->
+                </div>
+                
+                <!-- Progress Container -->
+                <div class="progress-container" id="progress-container" style="display: none;">
+                    <div class="progress mb-3" style="height: 8px;">
+                        <div class="progress-bar" role="progressbar" style="width: 0%" 
+                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" id="progress-bar"></div>
+                    </div>
+                    <div class="timer-display" id="timer-display">Checking payment status...</div>
+                    <div class="text-muted small mt-2">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Please complete the payment on your phone
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 justify-content-center" id="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="close-btn" style="display: none;">
+                    <i class="fas fa-times me-2"></i>Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+class MpesaPayment {
+    constructor() {
+        this.maxRetries = 15;
+        this.retryCount = 0;
+        this.checkoutRequestId = null;
+        this.statusCheckInterval = null;
+        this.progressInterval = null;
+        this.timeoutId = null;
+        
+        this.initializeEventListeners();
+    }
+    
+    initializeEventListeners() {
+        const form = document.getElementById('payment-form');
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Custom validation
+            const isValid = this.validateForm();
+            
+            if (isValid) {
+                this.initiatePayment();
+            } else {
+                form.classList.add('was-validated');
+                // Focus on the first invalid field
+                const firstInvalid = form.querySelector(':invalid');
+                if (firstInvalid) {
+                    firstInvalid.focus();
+                }
+                this.showError('Please correct the errors in the form');
+            }
+        });
+        
+        // Add input formatting and validation
+        const phoneInput = document.getElementById('phone_number');
+        phoneInput.addEventListener('input', this.formatPhoneNumber.bind(this));
+        phoneInput.addEventListener('blur', this.validatePhoneNumber.bind(this));
+        
+        const amountInput = document.getElementById('amount');
+        amountInput.addEventListener('input', this.formatAmount);
+    }
+    
+    validateForm() {
+        const phoneInput = document.getElementById('phone_number');
+        const amountInput = document.getElementById('amount');
+        
+        let isValid = true;
+        
+        // Validate phone number
+        if (!this.isValidPhoneNumber(phoneInput.value)) {
+            phoneInput.setCustomValidity('Please enter a valid phone number');
+            isValid = false;
+        } else {
+            phoneInput.setCustomValidity('');
+        }
+        
+        // Validate amount
+        const amount = parseFloat(amountInput.value.replace(/,/g, ''));
+        if (!amount || amount < 1 || amount > 300000) {
+            amountInput.setCustomValidity('Amount must be between 1 and 300,000');
+            isValid = false;
+        } else {
+            amountInput.setCustomValidity('');
+        }
+        
+        return isValid;
+    }
+    
+    isValidPhoneNumber(phone) {
+        // Remove all non-digit characters
+        const cleanPhone = phone.replace(/\D/g, '');
+        
+        // Check various valid formats:
+        // 0712345678 (10 digits starting with 07 or 01)
+        // 254712345678 (12 digits starting with 254)
+        // +254712345678 (13 characters with +254)
+        
+        if (cleanPhone.length === 10 && /^0[17]\d{8}$/.test(cleanPhone)) {
+            return true; // 07XX XXX XXX or 01XX XXX XXX
+        }
+        
+        if (cleanPhone.length === 12 && /^254[17]\d{8}$/.test(cleanPhone)) {
+            return true; // 254XXX XXX XXX
+        }
+        
+        return false;
+    }
+    
+    validatePhoneNumber(e) {
+        const input = e.target;
+        if (input.value && !this.isValidPhoneNumber(input.value)) {
+            input.setCustomValidity('Please enter a valid phone number (07XX XXX XXX, 01XX XXX XXX, or +254 XXX XXX XXX)');
+        } else {
+            input.setCustomValidity('');
+        }
+    }
+    
+    formatPhoneNumber(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        
+        // Handle different input patterns
+        if (value.startsWith('254')) {
+            // Format: +254 XXX XXX XXX
+            if (value.length > 12) value = value.slice(0, 12);
+            if (value.length >= 6) {
+                value = `+254 ${value.slice(3, 6)} ${value.slice(6, 9)} ${value.slice(9)}`.trim();
+            } else if (value.length >= 3) {
+                value = `+254 ${value.slice(3)}`;
+            } else {
+                value = `+${value}`;
+            }
+        } else if (value.startsWith('0')) {
+            // Format: 0XXX XXX XXX
+            if (value.length > 10) value = value.slice(0, 10);
+            if (value.length >= 4) {
+                value = `${value.slice(0, 4)} ${value.slice(4, 7)} ${value.slice(7)}`.trim();
+            }
+        } else if (value.length > 0) {
+            // Assume they want to type 0XXX format
+            value = '0' + value;
+            if (value.length > 10) value = value.slice(0, 10);
+            if (value.length >= 4) {
+                value = `${value.slice(0, 4)} ${value.slice(4, 7)} ${value.slice(7)}`.trim();
+            }
+        }
+        
+        e.target.value = value;
+    }
+    
+    formatAmount(e) {
+        let value = e.target.value.replace(/[^\d]/g, '');
+        if (value) {
+            e.target.value = parseInt(value).toLocaleString();
+        }
+    }
+    
+    async initiatePayment() {
+        const formData = new FormData(document.getElementById('payment-form'));
+        const payBtn = document.getElementById('pay-btn');
+        const btnText = payBtn.querySelector('span');
+        
+        // Clean and normalize phone number
+        const phoneInput = document.getElementById('phone_number');
+        const cleanPhone = this.normalizePhoneNumber(phoneInput.value);
+        formData.set('phone_number', cleanPhone);
+        
+        // Clean amount value (remove commas)
+        const amountInput = document.getElementById('amount');
+        const cleanAmount = amountInput.value.replace(/,/g, '');
+        formData.set('amount', cleanAmount);
+        
+        // Disable form and show loading
+        payBtn.disabled = true;
+        btnText.innerHTML = '<span class="loading-spinner me-2"></span>Initiating Payment...';
+        payBtn.classList.add('loading');
+        
+        try {
+            const response = await fetch('/payments/checkout/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.ResponseCode === "0") {
+                this.checkoutRequestId = data.CheckoutRequestID;
+                this.showStatusModal();
+                this.startStatusChecking();
+            } else {
+                this.showError(data.errorMessage || data.ResponseDescription || 'Payment initiation failed');
+            }
+        } catch (error) {
+            this.showError('Network error. Please check your connection and try again.');
+            console.error('Payment error:', error);
+        } finally {
+            // Re-enable form
+            payBtn.disabled = false;
+            btnText.innerHTML = 'Pay with M-Pesa';
+            payBtn.classList.remove('loading');
+        }
+    }
+    
+    normalizePhoneNumber(phone) {
+        // Remove all non-digit characters
+        let cleanPhone = phone.replace(/\D/g, '');
+        
+        // Convert to 254XXX format
+        if (cleanPhone.startsWith('0')) {
+            cleanPhone = '254' + cleanPhone.slice(1);
+        } else if (cleanPhone.startsWith('254')) {
+            // Already in correct format
+        } else if (cleanPhone.length === 9) {
+            // Assume it's missing the leading 0
+            cleanPhone = '254' + cleanPhone;
+        }
+        
+        return cleanPhone;
+    }
+    
+    showStatusModal() {
+        const modal = new bootstrap.Modal(document.getElementById('statusModal'));
+        
+        // Reset modal content with better design
+        document.getElementById('status-content').innerHTML = `
+            <div class="status-pending mb-4">
+                <div class="status-icon">
+                    <i class="fas fa-mobile-alt fa-4x"></i>
+                </div>
+            </div>
+            <h4 class="fw-bold mb-3">Payment Request Sent</h4>
+            <p class="text-muted mb-4">Check your phone for the M-Pesa prompt and enter your PIN to complete the payment</p>
+            <div class="d-flex justify-content-center align-items-center gap-3 mb-3">
+                <div class="bg-light rounded-circle p-3">
+                    <i class="fas fa-mobile-alt text-success"></i>
+                </div>
+                <div class="text-muted">
+                    <i class="fas fa-arrow-right"></i>
+                </div>
+                <div class="bg-light rounded-circle p-3">
+                    <i class="fas fa-lock text-primary"></i>
+                </div>
+                <div class="text-muted">
+                    <i class="fas fa-arrow-right"></i>
+                </div>
+                <div class="bg-light rounded-circle p-3">
+                    <i class="fas fa-check text-success"></i>
+                </div>
+            </div>
+        `;
+        
+        // Show progress container
+        document.getElementById('progress-container').style.display = 'block';
+        document.getElementById('close-btn').style.display = 'none';
+        
+        modal.show();
+    }
+    
+    startStatusChecking() {
+        this.retryCount = 0;
+        
+        // Start progress animation
+        this.startProgress();
+        
+        // Start checking status every 2 seconds
+        this.statusCheckInterval = setInterval(() => {
+            this.checkPaymentStatus();
+        }, 2000);
+        
+        // Set overall timeout (15 retries * 2 seconds = 30 seconds)
+        this.timeoutId = setTimeout(() => {
+            this.handleTimeout();
+        }, 30000);
+    }
+    
+    startProgress() {
+        let progress = 0;
+        const progressBar = document.getElementById('progress-bar');
+        const timerDisplay = document.getElementById('timer-display');
+        
+        this.progressInterval = setInterval(() => {
+            progress += (100 / 30); // 30 seconds total
+            if (progress > 100) progress = 100;
+            
+            progressBar.style.width = progress + '%';
+            progressBar.setAttribute('aria-valuenow', progress);
+            
+            const remainingTime = Math.max(0, 30 - Math.floor(progress * 30 / 100));
+            timerDisplay.textContent = `Checking payment status... (${remainingTime}s remaining)`;
+            
+            if (progress >= 100) {
+                clearInterval(this.progressInterval);
+            }
+        }, 1000);
+    }
+    
+    async checkPaymentStatus() {
+        this.retryCount++;
+        
+        try {
+            const response = await fetch('/payments/stk-query/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    checkout_request_id: this.checkoutRequestId
+                })
+            });
+            
+            const data = await response.json();
+            console.log('STK Query Response:', data); // Debug log
+            
+            // Check local transaction status first (most reliable)
+            if (data.local_transaction) {
+                const localStatus = data.local_transaction.status;
+                if (localStatus === "0") {
+                    // Payment successful
+                    this.handleSuccess(data);
+                    return;
+                } else if (localStatus === "1" && this.retryCount >= this.maxRetries) {
+                    // Still pending but reached max retries
+                    this.handleTimeout();
+                    return;
+                }
+            }
+            
+            // Fallback to M-Pesa API response
+            if (data.ResultCode === "0") {
+                // Payment successful
+                this.handleSuccess(data);
+            } else if (data.ResultCode === "1032" || data.ResultCode === "1037") {
+                // User cancelled or timeout - stop checking
+                this.handleCancellation(data);
+            } else if (this.retryCount >= this.maxRetries) {
+                // Max retries reached
+                this.handleTimeout();
+            }
+            // For other status codes, continue checking
+            
+        } catch (error) {
+            console.error('Status check error:', error);
+            if (this.retryCount >= this.maxRetries) {
+                this.handleTimeout();
+            }
+        }
+    }
+    
+    handleSuccess(data) {
+        this.stopChecking();
+        
+        document.getElementById('status-content').innerHTML = `
+            <div class="status-success mb-4">
+                <div class="status-icon">
+                    <i class="fas fa-check-circle fa-4x"></i>
+                </div>
+            </div>
+            <h4 class="text-success fw-bold mb-3">Payment Successful!</h4>
+            <p class="text-muted mb-4">Your payment has been processed successfully. You will receive an SMS confirmation shortly.</p>
+            <div class="bg-light rounded p-3 mb-3">
+                <small class="text-muted d-block">Transaction ID</small>
+                <strong class="text-dark">${this.checkoutRequestId || 'N/A'}</strong>
+            </div>
+        `;
+        
+        document.getElementById('progress-container').style.display = 'none';
+        document.getElementById('close-btn').style.display = 'block';
+        document.getElementById('close-btn').className = 'btn btn-success';
+        document.getElementById('close-btn').innerHTML = '<i class="fas fa-receipt me-2"></i>View Transaction';
+        
+        // Update close button to redirect to status page
+        document.getElementById('close-btn').onclick = () => {
+            if (this.checkoutRequestId) {
+                window.location.href = `/payments/status/${this.checkoutRequestId}/`;
+            } else {
+                bootstrap.Modal.getInstance(document.getElementById('statusModal')).hide();
+                this.resetForm();
+            }
+        };
+        
+        // Auto-redirect after 3 seconds
+        setTimeout(() => {
+            if (this.checkoutRequestId) {
+                window.location.href = `/payments/status/${this.checkoutRequestId}/`;
+            }
+        }, 3000);
+    }
+    
+    handleCancellation(data) {
+        this.stopChecking();
+        
+        document.getElementById('status-content').innerHTML = `
+            <div class="status-failed mb-4">
+                <div class="status-icon">
+                    <i class="fas fa-times-circle fa-4x"></i>
+                </div>
+            </div>
+            <h4 class="text-warning fw-bold mb-3">Payment Cancelled</h4>
+            <p class="text-muted mb-4">You cancelled the payment request. No money has been deducted from your account.</p>
+            <div class="text-center">
+                <button class="btn btn-outline-primary" onclick="bootstrap.Modal.getInstance(document.getElementById('statusModal')).hide();">
+                    <i class="fas fa-redo me-2"></i>Try Again
+                </button>
+            </div>
+        `;
+        
+        document.getElementById('progress-container').style.display = 'none';
+        document.getElementById('close-btn').style.display = 'block';
+        document.getElementById('close-btn').className = 'btn btn-outline-secondary';
+        document.getElementById('close-btn').innerHTML = '<i class="fas fa-times me-2"></i>Close';
+    }
+    
+    handleTimeout() {
+        this.stopChecking();
+        
+        document.getElementById('status-content').innerHTML = `
+            <div class="status-failed mb-4">
+                <div class="status-icon">
+                    <i class="fas fa-clock fa-4x"></i>
+                </div>
+            </div>
+            <h4 class="text-danger fw-bold mb-3">Payment Timeout</h4>
+            <p class="text-muted mb-4">You took too long to complete the payment. The payment may still be processing in the background.</p>
+            <div class="d-flex gap-3 justify-content-center">
+                <button class="btn btn-outline-primary btn-sm" onclick="window.mpesaPayment.recheckStatus()">
+                    <i class="fas fa-sync me-2"></i>Check Again
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="bootstrap.Modal.getInstance(document.getElementById('statusModal')).hide();">
+                    <i class="fas fa-redo me-2"></i>Start Over
+                </button>
+            </div>
+        `;
+        
+        document.getElementById('progress-container').style.display = 'none';
+        document.getElementById('close-btn').style.display = 'block';
+        document.getElementById('close-btn').className = 'btn btn-outline-secondary';
+        document.getElementById('close-btn').innerHTML = '<i class="fas fa-times me-2"></i>Close';
+    }
+    
+    async recheckStatus() {
+        if (!this.checkoutRequestId) return;
+        
+        document.getElementById('status-content').innerHTML = `
+            <div class="status-pending mb-4">
+                <div class="status-icon">
+                    <span class="loading-spinner"></span>
+                </div>
+            </div>
+            <h4 class="fw-bold mb-3">Rechecking Payment Status</h4>
+            <p class="text-muted">Please wait while we verify your payment status...</p>
+        `;
+        
+        try {
+            const response = await fetch('/payments/stk-query/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    checkout_request_id: this.checkoutRequestId
+                })
+            });
+            
+            const data = await response.json();
+            console.log('Recheck Response:', data);
+            
+            if (data.local_transaction && data.local_transaction.status === "0") {
+                this.handleSuccess(data);
+            } else {
+                this.handleTimeout();
+            }
+        } catch (error) {
+            console.error('Recheck error:', error);
+            this.handleTimeout();
+        }
+    }
+    
+    showError(message) {
+        // Create a toast notification instead of alert
+        const toastHtml = `
+            <div class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+        
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = toastContainer.lastElementChild;
+        const toast = new bootstrap.Toast(toastElement);
+        toast.show();
+        
+        // Remove toast element after it's hidden
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
+    
+    stopChecking() {
+        if (this.statusCheckInterval) {
+            clearInterval(this.statusCheckInterval);
+            this.statusCheckInterval = null;
+        }
+        
+        if (this.progressInterval) {
+            clearInterval(this.progressInterval);
+            this.progressInterval = null;
+        }
+        
+        if (this.timeoutId) {
+            clearTimeout(this.timeoutId);
+            this.timeoutId = null;
+        }
+    }
+    
+    resetForm() {
+        const form = document.getElementById('payment-form');
+        form.reset();
+        form.classList.remove('was-validated');
+        this.checkoutRequestId = null;
+        this.retryCount = 0;
+    }
+}
+
+// Initialize the payment system when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    window.mpesaPayment = new MpesaPayment();
+});
+</script>
+{% endblock %}

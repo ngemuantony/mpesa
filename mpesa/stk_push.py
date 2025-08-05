@@ -218,11 +218,14 @@ class MpesaGateWay:
         reference = data.get("reference", "Test")  # Default reference if not provided
         description = data.get("description", "Test")  # Default description if not provided
         
+        # Generate fresh password and timestamp for this request
+        fresh_password = self.generate_password()
+        
         # Prepare STK Push request data according to Safaricom API specification
         req_data = {
             "BusinessShortCode": self.shortcode,      # Business number (paybill/till)
-            "Password": self.password,                # Base64 encoded password
-            "Timestamp": self.timestamp,              # Request timestamp
+            "Password": fresh_password,               # Base64 encoded password (fresh)
+            "Timestamp": self.timestamp,              # Request timestamp (fresh)
             "TransactionType": "CustomerPayBillOnline",  # Transaction type
             "Amount": math.ceil(float(amount)),       # Round up amount to nearest integer
             "PartyA": phone_number,                   # Customer phone number
@@ -279,29 +282,65 @@ class MpesaGateWay:
         Returns:
             dict: M-Pesa API response with transaction status information
         """
+        # Generate fresh password and timestamp for this request
+        fresh_password = self.generate_password()
+        
         # Prepare query request data
         req_data = {
             "BusinessShortCode": self.shortcode,
-            "Password": self.password,
-            "Timestamp": self.timestamp,
+            "Password": fresh_password,
+            "Timestamp": self.timestamp,  # This is updated in generate_password()
             "CheckoutRequestID": checkout_request_id
         }
 
         try:
+            # Log the request before sending
+            logging.info("STK Query request data {}".format(req_data))
+            logging.info("STK Query URL: {}".format(self.stk_query_url))
+            logging.info("Request headers: {}".format(self.headers))
+            
             # Send query request to Safaricom API
             res = requests.post(
                 self.stk_query_url, json=req_data, headers=self.headers, timeout=30
             )
-            res_data = res.json()
             
-            # Log query request and response
-            logging.info("STK Query request data {}".format(req_data))
+            # Log response status
+            logging.info("STK Query response status: {}".format(res.status_code))
+            
+            # Check if response is valid JSON
+            try:
+                res_data = res.json()
+            except ValueError as json_error:
+                logging.error("Invalid JSON response: {}".format(json_error))
+                logging.error("Response text: {}".format(res.text))
+                return {
+                    "ResultCode": "1", 
+                    "ResultDesc": "Invalid response format", 
+                    "error": "Invalid JSON response"
+                }
+            
+            # Log query response
             logging.info("STK Query response info {}".format(res_data))
             
+            # Check for HTTP errors
+            if not res.ok:
+                logging.error("HTTP error {}: {}".format(res.status_code, res_data))
+                return {
+                    "ResultCode": "1", 
+                    "ResultDesc": "HTTP error {}".format(res.status_code), 
+                    "error": str(res_data)
+                }
+            
             return res_data
+            
+        except requests.exceptions.Timeout as timeout_error:
+            logging.error("STK Query timeout: {}".format(timeout_error))
+            return {"ResultCode": "1", "ResultDesc": "Request timeout", "error": str(timeout_error)}
+        except requests.exceptions.ConnectionError as conn_error:
+            logging.error("STK Query connection error: {}".format(conn_error))
+            return {"ResultCode": "1", "ResultDesc": "Connection error", "error": str(conn_error)}
         except Exception as e:
             logging.error("STK Query error: {}".format(e))
-            # Return error response if query fails
             return {"ResultCode": "1", "ResultDesc": "Query failed", "error": str(e)}
 
     def check_status(self, data):
@@ -416,10 +455,19 @@ class MpesaGateWay:
                 data["Body"]["stkCallback"]["CheckoutRequestID"]
             ))
         else:
-            # Payment failed or was cancelled
-            transaction.status = "1"  # Keep as pending/failed
-            logging.warning("Payment failed for CheckoutRequestID: {} with status: {}".format(
-                data["Body"]["stkCallback"]["CheckoutRequestID"], status
+            # Map different failure codes to appropriate statuses
+            result_code = str(data.get("Body", {}).get("stkCallback", {}).get("ResultCode", "1"))
+            if result_code == "1032":  # User cancelled
+                transaction.status = "3"  # Cancelled
+            elif result_code == "1037":  # Timeout
+                transaction.status = "4"  # Timeout
+            elif result_code == "17":   # Insufficient funds
+                transaction.status = "2"  # Failed
+            else:
+                transaction.status = "2"  # General failure
+                
+            logging.warning("Payment failed for CheckoutRequestID: {} with status: {} (ResultCode: {})".format(
+                data["Body"]["stkCallback"]["CheckoutRequestID"], transaction.status, result_code
             ))
 
         # Save the updated transaction to database

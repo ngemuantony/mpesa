@@ -3,7 +3,13 @@ from django.db import models
 from phonenumber_field.modelfields import PhoneNumberField
 
 # Status choices for transaction - using string values for consistency
-STATUS = (("1", "Pending"), ("0", "Complete"))
+STATUS = (
+    ("1", "Pending"), 
+    ("0", "Complete"),
+    ("2", "Failed"),
+    ("3", "Cancelled"),
+    ("4", "Timeout")
+)
 
 class Transaction(models.Model):
     """

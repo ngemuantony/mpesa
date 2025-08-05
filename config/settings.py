@@ -24,11 +24,16 @@ SECRET_KEY = 'django-insecure-vj=%9ue*gsi59swh+$3xd2+g^4%lj)21yq)yp3o4(ls4icxw*x
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '61bf36add6d7.ngrok-free.app']
+ALLOWED_HOSTS = [
+    '127.0.0.1', 'localhost',
+    'digilaboratory.org', 'www.digilaboratory.org', 'admin.digilaboratory.org', 'api.digilaboratory.org']
 
 # CSRF Trusted Origins - Required for Django 4.0+
 CSRF_TRUSTED_ORIGINS = [
-    'https://61bf36add6d7.ngrok-free.app',
+    'https://digilaboratory.org',
+    'https://www.digilaboratory.org',
+    'https://admin.digilaboratory.org',
+    'https://api.digilaboratory.org',
     'http://127.0.0.1:8000',
     'http://localhost:8000',
 ]

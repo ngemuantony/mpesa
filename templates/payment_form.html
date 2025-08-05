@@ -5,57 +5,57 @@
 {% block content %}
 <form id="payment-form" class="needs-validation" novalidate>
     {% csrf_token %}
-    <div class="row g-4">
+    <div class="row g-2">
         <div class="col-12">
-            <label for="phone_number" class="form-label">
+            <label for="phone_number" class="form-label mb-1">
                 <i class="fas fa-phone"></i> Phone Number
             </label>
-            <input type="tel" class="form-control form-control-lg" id="phone_number" 
+            <input type="tel" class="form-control form-control-sm" id="phone_number" 
                    name="phone_number" placeholder="07XXXXXXXX" required>
-            <div class="form-text">Enter your phone number (07XX XXX XXX, 01XX XXX XXX, or +254 XXX XXX XXX)</div>
+            <div class="form-text small">Enter your phone number</div>
             <div class="invalid-feedback">Please enter a valid phone number</div>
         </div>
         
         <div class="col-12">
-            <label for="amount" class="form-label">
+            <label for="amount" class="form-label mb-1">
                 <i class="fas fa-money-bill-wave"></i> Amount
             </label>
-            <div class="input-group input-group-lg">
+            <div class="input-group input-group-sm">
                 <span class="input-group-text">KES</span>
                 <input type="number" class="form-control" id="amount" 
                        name="amount" min="1" max="300000" placeholder="10" required>
             </div>
-            <div class="form-text">Amount between KES 1 - 300,000</div>
+            <div class="form-text small">1 - 300,000</div>
             <div class="invalid-feedback">Please enter a valid amount</div>
         </div>
         
         <div class="col-md-6">
-            <label for="reference" class="form-label">
+            <label for="reference" class="form-label mb-1">
                 <i class="fas fa-hashtag"></i> Reference
             </label>
-            <input type="text" class="form-control form-control-lg" id="reference" 
+            <input type="text" class="form-control form-control-sm" id="reference" 
                    name="reference" placeholder="INV001" maxlength="40">
-            <div class="form-text">Optional payment reference</div>
+            <div class="form-text small">Optional</div>
         </div>
         
         <div class="col-md-6">
-            <label for="description" class="form-label">
+            <label for="description" class="form-label mb-1">
                 <i class="fas fa-comment-alt"></i> Description
             </label>
-            <input type="text" class="form-control form-control-lg" id="description" 
+            <input type="text" class="form-control form-control-sm" id="description" 
                    name="description" placeholder="Payment for..." maxlength="100">
-            <div class="form-text">What is this payment for?</div>
+            <div class="form-text small">Optional</div>
         </div>
     </div>
     
-    <div class="d-grid mt-5">
+    <div class="d-grid mt-4">
         <button type="submit" class="btn btn-mpesa btn-lg" id="pay-btn">
             <i class="fas fa-credit-card me-2"></i>
             <span>Pay with M-Pesa</span>
         </button>
     </div>
     
-    <div class="text-center mt-4">
+    <div class="text-center mt-3">
         <small class="text-muted">
             <i class="fas fa-shield-alt me-1"></i>
             Secured by 256-bit SSL encryption
@@ -109,13 +109,14 @@
      */
     class MpesaPayment {
         constructor() {
-            this.maxRetries = 15;
+            this.maxRetries = 8; // Reduced to 8 since we're checking every 15 seconds (2 minutes total)
             this.retryCount = 0;
             this.checkoutRequestId = null;
             this.statusCheckInterval = null;
             this.progressInterval = null;
             this.timeoutId = null;
-            this.isChecking = false; // New flag to prevent concurrent checks
+            this.isChecking = false; // Flag to prevent concurrent checks
+            this.isFormLocked = false; // Flag to track form lock state
             this.initializeEventListeners();
         }
 
@@ -155,16 +156,18 @@
                 const buttonId = target.id;
                 console.log('Modal button clicked:', buttonId);
 
-                // Prevent actions during active status checking
-                if (this.isChecking) {
+                // Prevent actions during active status checking unless it's a cancellation action
+                if (this.isChecking && !['cancel-tryagain-btn', 'timeout-startover-btn', 'new-payment-btn', 'close-modal-btn'].includes(buttonId)) {
                     console.log('Action blocked: Status check in progress');
-                    this.showError('Please wait until the current check completes');
+                    this.showError('Please wait until the current check completes or cancel the payment');
                     return;
                 }
 
                 switch (buttonId) {
                     case 'cancel-tryagain-btn':
                         console.log('Processing cancellation try again');
+                        this.stopChecking();
+                        this.unlockForm();
                         bootstrap.Modal.getInstance(modal).hide();
                         this.resetForm();
                         break;
@@ -177,11 +180,15 @@
                     case 'timeout-startover-btn':
                     case 'new-payment-btn':
                         console.log('Processing start over');
+                        this.stopChecking();
+                        this.unlockForm();
                         bootstrap.Modal.getInstance(modal).hide();
                         this.resetForm();
                         break;
                     case 'close-modal-btn':
                         console.log('Processing modal close');
+                        this.stopChecking();
+                        this.unlockForm();
                         bootstrap.Modal.getInstance(modal).hide();
                         break;
                     case 'close-btn':
@@ -189,6 +196,7 @@
                         if (this.checkoutRequestId) {
                             window.location.href = `/payments/status/${this.checkoutRequestId}/`;
                         } else {
+                            this.unlockForm();
                             bootstrap.Modal.getInstance(modal).hide();
                             this.resetForm();
                         }
@@ -287,9 +295,7 @@
             const cleanAmount = amountInput.value.replace(/,/g, '');
             formData.set('amount', cleanAmount);
 
-            payBtn.disabled = true;
-            btnText.innerHTML = '<span class="loading-spinner me-2"></span>Initiating Payment...';
-            payBtn.classList.add('loading');
+            this.lockForm();
 
             try {
                 const response = await fetch('/payments/checkout/', {
@@ -305,16 +311,55 @@
                     this.showStatusModal();
                     this.startStatusChecking();
                 } else {
+                    this.unlockForm();
                     this.showError(data.errorMessage || data.ResponseDescription || 'Payment initiation failed');
                 }
             } catch (error) {
+                this.unlockForm();
                 this.showError('Network error. Please check your connection and try again.');
                 console.error('Payment error:', error);
-            } finally {
-                payBtn.disabled = false;
-                btnText.innerHTML = 'Pay with M-Pesa';
-                payBtn.classList.remove('loading');
             }
+        }
+
+        lockForm() {
+            this.isFormLocked = true;
+            const payBtn = document.getElementById('pay-btn');
+            const btnText = payBtn.querySelector('span');
+            
+            payBtn.disabled = true;
+            btnText.innerHTML = '<span class="loading-spinner me-2"></span>Connecting to M-Pesa...';
+            payBtn.classList.add('loading');
+            
+            // Add pulsing effect to button
+            payBtn.style.animation = 'pulse 1.5s infinite';
+            
+            // Disable form inputs
+            const inputs = document.querySelectorAll('#payment-form input');
+            inputs.forEach(input => {
+                input.disabled = true;
+                input.style.opacity = '0.6';
+            });
+            
+            // Show progress toast
+            this.showProgressToast('Initiating payment request...');
+        }
+
+        unlockForm() {
+            this.isFormLocked = false;
+            const payBtn = document.getElementById('pay-btn');
+            const btnText = payBtn.querySelector('span');
+            
+            payBtn.disabled = false;
+            btnText.innerHTML = 'Pay with M-Pesa';
+            payBtn.classList.remove('loading');
+            payBtn.style.animation = '';
+            
+            // Re-enable form inputs
+            const inputs = document.querySelectorAll('#payment-form input');
+            inputs.forEach(input => {
+                input.disabled = false;
+                input.style.opacity = '1';
+            });
         }
 
         normalizePhoneNumber(phone) {
@@ -334,26 +379,56 @@
             document.getElementById('status-content').innerHTML = `
             <div class="status-pending mb-4">
                 <div class="status-icon">
-                    <i class="fas fa-mobile-alt fa-4x"></i>
+                    <div class="position-relative">
+                        <i class="fas fa-mobile-alt fa-4x text-primary"></i>
+                        <div class="position-absolute top-0 start-100 translate-middle">
+                            <span class="badge bg-success rounded-pill animate-pulse">
+                                <i class="fas fa-bell fa-xs"></i>
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
             <h4 class="fw-bold mb-3">Payment Request Sent</h4>
             <p class="text-muted mb-4">Check your phone for the M-Pesa prompt and enter your PIN to complete the payment</p>
-            <div class="d-flex justify-content-center align-items-center gap-3 mb-3">
-                <div class="bg-light rounded-circle p-3">
-                    <i class="fas fa-mobile-alt text-success"></i>
+            
+            <!-- Enhanced Step Indicator -->
+            <div class="payment-steps mb-4">
+                <div class="d-flex justify-content-center align-items-center gap-2 mb-3">
+                    <div class="step-item active">
+                        <div class="step-circle bg-success text-white">
+                            <i class="fas fa-paper-plane fa-sm"></i>
+                        </div>
+                        <small class="step-label text-success">Sent</small>
+                    </div>
+                    <div class="step-connector active"></div>
+                    <div class="step-item pending">
+                        <div class="step-circle bg-warning text-dark">
+                            <i class="fas fa-mobile-alt fa-sm"></i>
+                        </div>
+                        <small class="step-label text-warning">Waiting</small>
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step-item">
+                        <div class="step-circle bg-light text-muted">
+                            <i class="fas fa-check fa-sm"></i>
+                        </div>
+                        <small class="step-label text-muted">Complete</small>
+                    </div>
                 </div>
-                <div class="text-muted">
-                    <i class="fas fa-arrow-right"></i>
-                </div>
-                <div class="bg-light rounded-circle p-3">
-                    <i class="fas fa-lock text-primary"></i>
-                </div>
-                <div class="text-muted">
-                    <i class="fas fa-arrow-right"></i>
-                </div>
-                <div class="bg-light rounded-circle p-3">
-                    <i class="fas fa-check text-success"></i>
+                
+                <div class="alert alert-info border-0 bg-light">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-info-circle text-info me-3"></i>
+                        <div>
+                            <strong>Next Steps:</strong>
+                            <ol class="mb-0 mt-2 ps-3">
+                                <li>Check your phone for M-Pesa notification</li>
+                                <li>Enter your M-Pesa PIN</li>
+                                <li>Confirm the payment</li>
+                            </ol>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -368,25 +443,57 @@
             this.startProgress();
             this.statusCheckInterval = setInterval(() => {
                 this.checkPaymentStatus();
-            }, 2000); // Reduced interval to 2 seconds for faster cancellation detection
+            }, 15000); // Increased to 15 seconds to respect M-Pesa rate limits (4 requests per minute)
             this.timeoutId = setTimeout(() => {
                 this.handleTimeout();
-            }, 30000); // Reduced timeout to 30 seconds
+            }, 120000); // Increased timeout to 2 minutes to accommodate slower checking
         }
 
         startProgress() {
             let progress = 0;
+            let stepCount = 0;
             const progressBar = document.getElementById('progress-bar');
             const timerDisplay = document.getElementById('timer-display');
+            
+            // Progress steps with messages
+            const progressSteps = [
+                { threshold: 10, message: "Sending payment request to M-Pesa..." },
+                { threshold: 25, message: "Waiting for your response on phone..." },
+                { threshold: 50, message: "Verifying payment with M-Pesa..." },
+                { threshold: 75, message: "Processing payment confirmation..." },
+                { threshold: 90, message: "Finalizing transaction..." }
+            ];
+            
             this.progressInterval = setInterval(() => {
-                progress += (100 / 30); // Adjusted for 30 seconds
+                progress += (100 / 120); // Adjusted for 120 seconds (2 minutes)
                 if (progress > 100) progress = 100;
+                
                 progressBar.style.width = progress + '%';
                 progressBar.setAttribute('aria-valuenow', progress);
-                const remainingTime = Math.max(0, 30 - Math.floor(progress * 30 / 100));
-                timerDisplay.textContent = `Checking payment status... (${remainingTime}s remaining)`;
+                
+                const remainingTime = Math.max(0, 120 - Math.floor(progress * 120 / 100));
+                
+                // Update message based on progress
+                let currentMessage = "Checking payment status...";
+                for (const step of progressSteps) {
+                    if (progress >= step.threshold && stepCount < progressSteps.indexOf(step) + 1) {
+                        currentMessage = step.message;
+                        stepCount = progressSteps.indexOf(step) + 1;
+                        break;
+                    }
+                }
+                
+                timerDisplay.innerHTML = `
+                    <div class="fw-medium">${currentMessage}</div>
+                    <small class="text-muted">(${remainingTime}s remaining)</small>
+                `;
+                
                 if (progress >= 100) {
                     clearInterval(this.progressInterval);
+                    timerDisplay.innerHTML = `
+                        <div class="fw-medium">Completing verification...</div>
+                        <small class="text-muted">Please wait</small>
+                    `;
                 }
             }, 1000);
         }
@@ -401,60 +508,107 @@
 
             this.retryCount++;
             console.log(`Payment status check attempt ${this.retryCount}/${this.maxRetries}`);
+            console.log(`Making STK query for: ${this.checkoutRequestId}`);
 
             try {
+                const requestBody = {
+                    checkout_request_id: this.checkoutRequestId
+                };
+                console.log('STK Query Request Body:', requestBody);
+
                 const response = await fetch('/payments/stk-query/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
                     },
-                    body: JSON.stringify({
-                        checkout_request_id: this.checkoutRequestId
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
+                console.log('STK Query Response Status:', response.status);
+                console.log('STK Query Response Headers:', Object.fromEntries(response.headers.entries()));
+
                 if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`HTTP error! status: ${response.status}, response: ${errorText}`);
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
                 const data = await response.json();
-                console.log('STK Query Response:', data);
+                console.log('STK Query Response Data:', data);
+
+                // Check for backend errors first
+                if (data.error) {
+                    console.error('Backend error:', data.error);
+                    
+                    // Check for rate limiting specifically
+                    if (data.error.includes('Spike arrest violation') || data.error.includes('rate')) {
+                        console.warn('Rate limit hit, increasing retry interval');
+                        // Don't count rate limit as a regular retry
+                        this.retryCount = Math.max(0, this.retryCount - 1);
+                        return; // Will retry on next interval
+                    }
+                    
+                    if (this.retryCount >= this.maxRetries) {
+                        this.handleTimeout();
+                        return;
+                    }
+                    console.log('Backend error, will retry...');
+                    return;
+                }
 
                 // Check local transaction status first
                 if (data.local_transaction) {
                     const localStatus = data.local_transaction.status;
                     console.log('Local transaction status:', localStatus);
+                    console.log('Local transaction data:', data.local_transaction);
+                    
                     if (localStatus === "0") {
                         console.log('Payment successful from local transaction');
                         this.handleSuccess(data);
                         return;
                     } else if (localStatus === "2") {
-                        console.log('Payment failed/cancelled from local transaction');
-                        this.handleCancellation(data);
+                        console.log('Payment failed from local transaction');
+                        this.handleCancellation(data, 'failed');
+                        return;
+                    } else if (localStatus === "3") {
+                        console.log('Payment cancelled from local transaction');
+                        this.handleCancellation(data, 'cancelled');
+                        return;
+                    } else if (localStatus === "4") {
+                        console.log('Payment timeout from local transaction');
+                        this.handleCancellation(data, 'timeout');
                         return;
                     }
+                    // Status "1" means pending, continue to check M-Pesa API
                 }
 
                 // Check M-Pesa API response
-                if (data.ResultCode) {
+                if (data.ResultCode !== undefined) {
                     const resultCode = data.ResultCode.toString();
                     console.log('M-Pesa ResultCode:', resultCode);
+                    console.log('M-Pesa ResultDesc:', data.ResultDesc);
+                    
                     if (resultCode === "0") {
                         console.log('Payment successful from M-Pesa API');
                         this.handleSuccess(data);
                         return;
                     } else if (resultCode === "1032" || resultCode === "1037" || resultCode === "17") {
                         console.log('Payment cancelled/failed from M-Pesa API, code:', resultCode);
-                        this.handleCancellation(data);
+                        let reason = 'cancelled';
+                        if (resultCode === "1037") reason = 'timeout';
+                        else if (resultCode === "17") reason = 'failed';
+                        this.handleCancellation(data, reason);
                         return;
-                    } else if (resultCode === "1001" || resultCode === "1") {
-                        console.log('Payment still pending, will retry...');
+                    } else if (resultCode === "1001" || resultCode === "1" || resultCode === "4999") {
+                        console.log('Payment still pending, will retry... Code:', resultCode);
                     } else {
                         console.log('Payment failed with error code:', resultCode);
-                        this.handleCancellation(data);
+                        this.handleCancellation(data, 'failed');
                         return;
                     }
+                } else {
+                    console.log('No ResultCode in response, payment likely still pending');
                 }
 
                 // Check for max retries
@@ -467,6 +621,12 @@
                 console.log('Continuing to check payment status...');
             } catch (error) {
                 console.error('Status check error:', error);
+                console.error('Error details:', {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack
+                });
+                
                 if (this.retryCount >= this.maxRetries) {
                     console.log('Max retries reached due to errors, timing out...');
                     this.handleTimeout();
@@ -478,10 +638,13 @@
 
         handleSuccess(data) {
             this.stopChecking();
+            this.unlockForm();
+            this.showSuccessToast('Payment completed successfully!');
+            
             document.getElementById('status-content').innerHTML = `
             <div class="status-success mb-4">
                 <div class="status-icon">
-                    <i class="fas fa-check-circle fa-4x"></i>
+                    <i class="fas fa-check-circle fa-4x text-success"></i>
                 </div>
             </div>
             <h4 class="text-success fw-bold mb-3">Payment Successful!</h4>
@@ -490,36 +653,94 @@
                 <small class="text-muted d-block">Transaction ID</small>
                 <strong class="text-dark">${this.checkoutRequestId || 'N/A'}</strong>
             </div>
+            
+            <!-- Success Steps -->
+            <div class="payment-steps">
+                <div class="d-flex justify-content-center align-items-center gap-2 mb-3">
+                    <div class="step-item active">
+                        <div class="step-circle bg-success text-white">
+                            <i class="fas fa-paper-plane fa-sm"></i>
+                        </div>
+                        <small class="step-label text-success">Sent</small>
+                    </div>
+                    <div class="step-connector active"></div>
+                    <div class="step-item active">
+                        <div class="step-circle bg-success text-white">
+                            <i class="fas fa-mobile-alt fa-sm"></i>
+                        </div>
+                        <small class="step-label text-success">Confirmed</small>
+                    </div>
+                    <div class="step-connector active"></div>
+                    <div class="step-item active">
+                        <div class="step-circle bg-success text-white">
+                            <i class="fas fa-check fa-sm"></i>
+                        </div>
+                        <small class="step-label text-success">Complete</small>
+                    </div>
+                </div>
+            </div>
         `;
             document.getElementById('progress-container').style.display = 'none';
             document.getElementById('close-btn').style.display = 'block';
             document.getElementById('close-btn').className = 'btn btn-success';
             document.getElementById('close-btn').innerHTML = '<i class="fas fa-receipt me-2"></i>View Transaction';
             console.log('Success state set up');
-            setTimeout(() => {
-                if (this.checkoutRequestId) {
-                    window.location.href = `/payments/status/${this.checkoutRequestId}/`;
-                }
-            }, 3000);
         }
 
-        handleCancellation(data) {
+        handleCancellation(data, reason = 'cancelled') {
             this.stopChecking();
-            let reason = "cancelled";
-            let message = "You cancelled the payment request. No money has been deducted from your account.";
-            let icon = "fas fa-times-circle fa-4x text-warning";
+            this.unlockForm();
+            
+            let message, icon, title;
+            
+            // Use M-Pesa's actual ResultDesc if available
+            const mpesaMessage = data.ResultDesc || '';
+            
+            switch (reason) {
+                case 'timeout':
+                    title = 'Payment Timeout';
+                    message = mpesaMessage || 'The payment request timed out. Please try again.';
+                    icon = 'fas fa-clock fa-4x text-warning';
+                    break;
+                case 'failed':
+                    title = 'Payment Failed';
+                    message = mpesaMessage || 'Your payment could not be processed. Please check your M-Pesa account and try again.';
+                    icon = 'fas fa-exclamation-triangle fa-4x text-danger';
+                    break;
+                case 'cancelled':
+                default:
+                    title = 'Payment Cancelled';
+                    message = mpesaMessage || 'You cancelled the payment request. No money has been deducted from your account.';
+                    icon = 'fas fa-times-circle fa-4x text-warning';
+                    break;
+            }
+            
+            // Override with specific M-Pesa result codes and their descriptions
             if (data.ResultCode) {
                 const resultCode = data.ResultCode.toString();
                 if (resultCode === "1037") {
-                    reason = "timeout";
-                    message = "The payment request timed out. Please try again.";
-                    icon = "fas fa-clock fa-4x text-warning";
+                    title = 'Payment Timeout';
+                    message = data.ResultDesc || 'No response from user. The payment request timed out.';
+                    icon = 'fas fa-clock fa-4x text-warning';
                 } else if (resultCode === "17") {
-                    reason = "insufficient funds";
-                    message = "Insufficient funds in your M-Pesa account. Please top up and try again.";
-                    icon = "fas fa-exclamation-triangle fa-4x text-danger";
+                    title = 'Insufficient Funds';
+                    message = data.ResultDesc || 'Insufficient funds in your M-Pesa account. Please top up and try again.';
+                    icon = 'fas fa-wallet fa-4x text-danger';
+                } else if (resultCode === "1032") {
+                    title = 'Payment Cancelled';
+                    message = data.ResultDesc || 'You cancelled the payment on your phone.';
+                    icon = 'fas fa-times-circle fa-4x text-warning';
+                } else if (resultCode === "1025") {
+                    title = 'Invalid Phone Number';
+                    message = data.ResultDesc || 'The phone number provided is not valid for M-Pesa.';
+                    icon = 'fas fa-phone-slash fa-4x text-danger';
+                } else if (resultCode === "1001") {
+                    title = 'Payment Pending';
+                    message = data.ResultDesc || 'Payment is still being processed.';
+                    icon = 'fas fa-hourglass-half fa-4x text-info';
                 }
             }
+            
             console.log(`Payment ${reason}:`, data);
             document.getElementById('status-content').innerHTML = `
             <div class="status-failed mb-4">
@@ -527,8 +748,16 @@
                     <i class="${icon}"></i>
                 </div>
             </div>
-            <h4 class="text-warning fw-bold mb-3">Payment ${reason.charAt(0).toUpperCase() + reason.slice(1)}</h4>
+            <h4 class="text-warning fw-bold mb-3">${title}</h4>
             <p class="text-muted mb-4">${message}</p>
+            
+            ${data.ResultCode ? `
+            <div class="alert alert-light border">
+                <small class="text-muted d-block mb-1">M-Pesa Response Code</small>
+                <strong class="text-dark">${data.ResultCode}</strong>
+            </div>
+            ` : ''}
+            
             <div class="alert alert-info">
                 <i class="fas fa-info-circle me-2"></i>
                 You can start a new payment whenever you're ready.
@@ -547,6 +776,7 @@
 
         handleTimeout() {
             this.stopChecking();
+            this.unlockForm();
             document.getElementById('status-content').innerHTML = `
             <div class="status-failed mb-4">
                 <div class="status-icon">
@@ -629,10 +859,19 @@
                         this.handleSuccess(data);
                         return;
                     } else if (localStatus === "2") {
-                        console.log('Recheck - Payment failed/cancelled from local transaction');
-                        this.handleCancellation(data);
+                        console.log('Recheck - Payment failed from local transaction');
+                        this.handleCancellation(data, 'failed');
+                        return;
+                    } else if (localStatus === "3") {
+                        console.log('Recheck - Payment cancelled from local transaction');
+                        this.handleCancellation(data, 'cancelled');
+                        return;
+                    } else if (localStatus === "4") {
+                        console.log('Recheck - Payment timeout from local transaction');
+                        this.handleCancellation(data, 'timeout');
                         return;
                     }
+                    // Status "1" means pending, continue to check M-Pesa API
                 }
 
                 if (data.ResultCode) {
@@ -644,7 +883,10 @@
                         return;
                     } else if (resultCode === "1032" || resultCode === "1037" || resultCode === "17") {
                         console.log('Recheck - Payment cancelled/failed from M-Pesa API');
-                        this.handleCancellation(data);
+                        let reason = 'cancelled';
+                        if (resultCode === "1037") reason = 'timeout';
+                        else if (resultCode === "17") reason = 'failed';
+                        this.handleCancellation(data, reason);
                         return;
                     }
                 }
@@ -661,6 +903,7 @@
         }
 
         handleRecheckResult(data) {
+            this.unlockForm(); // Unlock form when recheck shows still pending
             document.getElementById('status-content').innerHTML = `
             <div class="status-failed mb-4">
                 <div class="status-icon">
@@ -689,6 +932,7 @@
         }
 
         handleRecheckError() {
+            this.unlockForm(); // Unlock form on recheck error
             document.getElementById('status-content').innerHTML = `
             <div class="status-failed mb-4">
                 <div class="status-icon">
@@ -724,6 +968,38 @@
                 </div>
             </div>
         `;
+            this.showToast(toastHtml);
+        }
+
+        showProgressToast(message) {
+            const toastHtml = `
+            <div class="toast align-items-center text-white bg-info border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-info-circle me-2"></i>
+                        ${message}
+                    </div>
+                </div>
+            </div>
+        `;
+            this.showToast(toastHtml, 2000);
+        }
+
+        showSuccessToast(message) {
+            const toastHtml = `
+            <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-check-circle me-2"></i>
+                        ${message}
+                    </div>
+                </div>
+            </div>
+        `;
+            this.showToast(toastHtml, 3000);
+        }
+
+        showToast(toastHtml, autoHideDelay = 5000) {
             let toastContainer = document.querySelector('.toast-container');
             if (!toastContainer) {
                 toastContainer = document.createElement('div');
@@ -732,7 +1008,10 @@
             }
             toastContainer.insertAdjacentHTML('beforeend', toastHtml);
             const toastElement = toastContainer.lastElementChild;
-            const toast = new bootstrap.Toast(toastElement);
+            const toast = new bootstrap.Toast(toastElement, {
+                autohide: true,
+                delay: autoHideDelay
+            });
             toast.show();
             toastElement.addEventListener('hidden.bs.toast', () => {
                 toastElement.remove();
@@ -757,6 +1036,7 @@
 
         resetForm() {
             this.stopChecking();
+            this.unlockForm();
             const form = document.getElementById('payment-form');
             form.reset();
             form.classList.remove('was-validated');
@@ -766,13 +1046,6 @@
             });
             this.checkoutRequestId = null;
             this.retryCount = 0;
-            const payBtn = document.getElementById('pay-btn');
-            payBtn.disabled = false;
-            payBtn.classList.remove('loading');
-            const btnText = payBtn.querySelector('span');
-            if (btnText) {
-                btnText.innerHTML = 'Pay with M-Pesa';
-            }
             console.log('Form and payment state reset successfully');
         }
     }

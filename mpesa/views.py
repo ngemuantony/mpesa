@@ -189,15 +189,60 @@ class MpesaStkQuery(APIView):
         # Query M-Pesa API for payment status
         res = get_gateway().stk_push_query(checkout_request_id)
         
-        # Also return local transaction data if available
+        # Update local transaction status based on M-Pesa response
         try:
             from .models import Transaction
             transaction = Transaction.objects.get(checkout_request_id=checkout_request_id)
+            
+                        # Map M-Pesa ResultCode to our local status codes
+            if 'ResultCode' in res:
+                result_code = str(res['ResultCode'])
+                old_status = transaction.status
+                
+                # Update status based on M-Pesa ResultCode
+                if result_code == "0":
+                    # Payment successful
+                    transaction.status = "0"  # Complete
+                elif result_code == "1032":
+                    # User cancelled
+                    transaction.status = "3"  # Cancelled
+                elif result_code == "1037":
+                    # Request timeout (no response from user)
+                    transaction.status = "4"  # Timeout
+                elif result_code == "17":
+                    # Insufficient funds
+                    transaction.status = "2"  # Failed
+                elif result_code in ["1001", "1", "4999"]:
+                    # Still pending (4999 = transaction still under processing)
+                    transaction.status = "1"  # Pending
+                else:
+                    # Other error codes - mark as failed
+                    transaction.status = "2"  # Failed
+                
+                # Save only if status changed
+                if transaction.status != old_status:
+                    transaction.save()
+                    print(f"Transaction {checkout_request_id} status updated from {old_status} to {transaction.status}")
+                else:
+                    print(f"Transaction {checkout_request_id} status unchanged: {transaction.status}")
+            
+            # Get updated transaction data
+            transaction.refresh_from_db()
             transaction_data = TransactionSerializer(transaction).data
             res['local_transaction'] = transaction_data
+            
         except Transaction.DoesNotExist:
             # No local transaction found
             res['local_transaction'] = None
+        except Exception as e:
+            print(f"Error updating transaction status: {e}")
+            # Still return the transaction data even if update failed
+            try:
+                transaction = Transaction.objects.get(checkout_request_id=checkout_request_id)
+                transaction_data = TransactionSerializer(transaction).data
+                res['local_transaction'] = transaction_data
+            except:
+                res['local_transaction'] = None
         
         return Response(res, status=200)
 

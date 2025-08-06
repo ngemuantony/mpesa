@@ -111,6 +111,14 @@
                             <span class="fw-semibold">{{ transaction.updated_at|date:"M d, H:i" }}</span>
                         </div>
                     </div>
+                    {% if transaction.ip %}
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">Client IP</span>
+                            <span class="fw-semibold font-monospace small">{{ transaction.ip }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

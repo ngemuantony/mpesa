@@ -136,3 +136,19 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Proxy and IP detection settings
+# These help when the application is behind a reverse proxy (nginx, Apache, load balancer, etc.)
+
+# If you're using a reverse proxy, set this to the number of proxies
+# USE_X_FORWARDED_HOST = True
+# USE_X_FORWARDED_PORT = True
+
+# For IP detection behind proxies
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# If running behind a single proxy (like nginx), uncomment:
+# USE_X_FORWARDED_HOST = True
+
+# If you know your proxy IPs, you can set them here (for security)
+# ALLOWED_PROXY_IPS = ['127.0.0.1', '::1']  # Add your proxy server IPs

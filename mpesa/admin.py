@@ -54,6 +54,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'status',             # Current transaction status
         'reference',          # Payment reference/description
         'receipt_no',         # M-Pesa receipt number
+        'ip',                 # Client IP address
         'created'             # Transaction creation timestamp
     ]
     

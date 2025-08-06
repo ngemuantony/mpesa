@@ -867,11 +867,19 @@
                     <i class="fas fa-redo me-2"></i>Try Again
                 </button>
             </div>
+            <div class="text-center mt-3">
+                <p class="text-muted small">Returning to payment form in <span id="failure-countdown">4</span> seconds... 
+                    <button class="btn btn-link btn-sm p-0 text-decoration-underline" onclick="window.mpesaPayment.stopChecking()">Cancel auto-redirect</button>
+                </p>
+            </div>
         `;
             document.getElementById('progress-container').style.display = 'none';
             document.getElementById('close-btn').style.display = 'block';
             document.getElementById('close-btn').className = 'btn btn-outline-secondary';
             document.getElementById('close-btn').innerHTML = '<i class="fas fa-times me-2"></i>Close';
+            
+            // Auto-redirect to payment form after 4 seconds
+            this.startFailureRedirectCountdown();
         }
 
         handleTimeout() {
@@ -1168,6 +1176,32 @@
                         console.log('Auto-redirecting to transaction status page');
                         window.location.href = `/payments/status/${this.checkoutRequestId}/`;
                     }
+                    return;
+                }
+                
+                countdown--;
+                this.redirectTimer = setTimeout(updateCountdown, 1000);
+            };
+            
+            // Start the countdown after 1 second
+            this.redirectTimer = setTimeout(updateCountdown, 1000);
+        }
+
+        startFailureRedirectCountdown() {
+            let countdown = 4;
+            const countdownElement = document.getElementById('failure-countdown');
+            
+            const updateCountdown = () => {
+                if (countdownElement) {
+                    countdownElement.textContent = countdown;
+                }
+                
+                if (countdown <= 0) {
+                    // Close modal and reset form to allow new payment
+                    console.log('Auto-redirecting to payment form after failure');
+                    const modal = document.getElementById('statusModal');
+                    bootstrap.Modal.getInstance(modal).hide();
+                    this.resetForm();
                     return;
                 }
                 

@@ -26,6 +26,7 @@ from phonenumber_field.phonenumber import PhoneNumber
 from config.settings import env
 from .models import Transaction
 from .serializers import TransactionSerializer
+from .utils import get_client_ip
 
 # Initialize logger for this module
 logging = logging.getLogger("default")
@@ -255,7 +256,7 @@ class MpesaGateWay:
                 "reference": reference,
                 "description": description,
                 "checkout_request_id": res_data["CheckoutRequestID"],  # Unique M-Pesa request ID
-                "ip": request.META.get("REMOTE_ADDR"),  # Customer's IP address
+                "ip": get_client_ip(request),  # Customer's real IP address
                 "status": "1"  # Set as Pending initially
             }
             

@@ -461,7 +461,7 @@ class MpesaGateWay:
                 transaction.status = "3"  # Cancelled
             elif result_code == "1037":  # Timeout
                 transaction.status = "4"  # Timeout
-            elif result_code == "17":   # Insufficient funds
+            elif result_code in ["1", "17"]:   # Insufficient funds or other payment failures
                 transaction.status = "2"  # Failed
             else:
                 transaction.status = "2"  # General failure

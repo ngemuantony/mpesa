@@ -209,10 +209,10 @@ class MpesaStkQuery(APIView):
                 elif result_code == "1037":
                     # Request timeout (no response from user)
                     transaction.status = "4"  # Timeout
-                elif result_code == "17":
-                    # Insufficient funds
+                elif result_code in ["1", "17"]:
+                    # Insufficient funds or other payment failures
                     transaction.status = "2"  # Failed
-                elif result_code in ["1001", "1", "4999"]:
+                elif result_code in ["1001", "4999"]:
                     # Still pending (4999 = transaction still under processing)
                     transaction.status = "1"  # Pending
                 else:

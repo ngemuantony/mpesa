@@ -599,14 +599,14 @@
                         console.log('Payment successful from M-Pesa API');
                         this.handleSuccess(data);
                         return;
-                    } else if (resultCode === "1032" || resultCode === "1037" || resultCode === "17") {
+                    } else if (resultCode === "1032" || resultCode === "1037" || resultCode === "1" || resultCode === "17") {
                         console.log('Payment cancelled/failed from M-Pesa API, code:', resultCode);
                         let reason = 'cancelled';
                         if (resultCode === "1037") reason = 'timeout';
-                        else if (resultCode === "17") reason = 'failed';
+                        else if (resultCode === "1" || resultCode === "17") reason = 'failed';
                         this.handleCancellation(data, reason);
                         return;
-                    } else if (resultCode === "1001" || resultCode === "1" || resultCode === "4999") {
+                    } else if (resultCode === "1001" || resultCode === "4999") {
                         console.log('Payment still pending, will retry... Code:', resultCode);
                     } else {
                         console.log('Payment failed with error code:', resultCode);
@@ -734,7 +734,7 @@
                     title = 'Payment Timeout';
                     message = data.ResultDesc || 'No response from user. The payment request timed out.';
                     icon = 'fas fa-clock fa-4x text-warning';
-                } else if (resultCode === "17") {
+                } else if (resultCode === "1" || resultCode === "17") {
                     title = 'Insufficient Funds';
                     message = data.ResultDesc || 'Insufficient funds in your M-Pesa account. Please top up and try again.';
                     icon = 'fas fa-wallet fa-4x text-danger';
@@ -893,11 +893,11 @@
                         console.log('Recheck - Payment successful from M-Pesa API');
                         this.handleSuccess(data);
                         return;
-                    } else if (resultCode === "1032" || resultCode === "1037" || resultCode === "17") {
+                    } else if (resultCode === "1032" || resultCode === "1037" || resultCode === "1" || resultCode === "17") {
                         console.log('Recheck - Payment cancelled/failed from M-Pesa API');
                         let reason = 'cancelled';
                         if (resultCode === "1037") reason = 'timeout';
-                        else if (resultCode === "17") reason = 'failed';
+                        else if (resultCode === "1" || resultCode === "17") reason = 'failed';
                         this.handleCancellation(data, reason);
                         return;
                     }

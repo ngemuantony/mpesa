@@ -115,6 +115,7 @@
             this.statusCheckInterval = null;
             this.progressInterval = null;
             this.timeoutId = null;
+            this.redirectTimer = null; // Timer for auto-redirect countdown
             this.isChecking = false; // Flag to prevent concurrent checks
             this.isFormLocked = false; // Flag to track form lock state
             this.initializeEventListeners();
@@ -193,6 +194,11 @@
                         break;
                     case 'close-btn':
                         console.log('Processing success close');
+                        // Clear auto-redirect timer when user manually clicks
+                        if (this.redirectTimer) {
+                            clearTimeout(this.redirectTimer);
+                            this.redirectTimer = null;
+                        }
                         if (this.checkoutRequestId) {
                             window.location.href = `/payments/status/${this.checkoutRequestId}/`;
                         } else {
@@ -679,12 +685,18 @@
                     </div>
                 </div>
             </div>
+            <div class="text-center mt-3">
+                <p class="text-muted small">Redirecting to transaction details in <span id="redirect-countdown">3</span> seconds...</p>
+            </div>
         `;
             document.getElementById('progress-container').style.display = 'none';
             document.getElementById('close-btn').style.display = 'block';
             document.getElementById('close-btn').className = 'btn btn-success';
             document.getElementById('close-btn').innerHTML = '<i class="fas fa-receipt me-2"></i>View Transaction';
             console.log('Success state set up');
+            
+            // Auto-redirect after 3 seconds with countdown
+            this.startRedirectCountdown();
         }
 
         handleCancellation(data, reason = 'cancelled') {
@@ -1031,6 +1043,10 @@
                 clearTimeout(this.timeoutId);
                 this.timeoutId = null;
             }
+            if (this.redirectTimer) {
+                clearTimeout(this.redirectTimer);
+                this.redirectTimer = null;
+            }
             this.isChecking = false; // Reset checking flag
         }
 
@@ -1047,6 +1063,32 @@
             this.checkoutRequestId = null;
             this.retryCount = 0;
             console.log('Form and payment state reset successfully');
+        }
+
+        startRedirectCountdown() {
+            let countdown = 3;
+            const countdownElement = document.getElementById('redirect-countdown');
+            
+            const updateCountdown = () => {
+                if (countdownElement) {
+                    countdownElement.textContent = countdown;
+                }
+                
+                if (countdown <= 0) {
+                    // Redirect to transaction status page
+                    if (this.checkoutRequestId) {
+                        console.log('Auto-redirecting to transaction status page');
+                        window.location.href = `/payments/status/${this.checkoutRequestId}/`;
+                    }
+                    return;
+                }
+                
+                countdown--;
+                this.redirectTimer = setTimeout(updateCountdown, 1000);
+            };
+            
+            // Start the countdown after 1 second
+            this.redirectTimer = setTimeout(updateCountdown, 1000);
         }
     }
 

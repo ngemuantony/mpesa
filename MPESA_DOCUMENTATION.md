@@ -1,7 +1,55 @@
 # M-Pesa STK Push Integration
 
 ## Overview
-This implementation provides complete M-Pesa STK Push integration with query functionality.
+This implementation provides complete M-Pesa STK Push integration with advanced security features, query functionality, and comprehensive callback validation.
+
+## Enhanced Security Features
+
+### Multi-Layer Security System
+The system implements comprehensive security for M-Pesa callbacks:
+
+1. **IP Whitelisting**: Validates requests against official Safaricom IP addresses
+2. **HMAC Signature Validation**: Cryptographic validation of callback authenticity  
+3. **Structure Validation**: Ensures callback payloads have proper format and required fields
+4. **Rate Limiting**: Prevents callback flooding and abuse
+5. **Comprehensive Logging**: Detailed security event logging and monitoring
+
+### Security Configuration
+
+To configure enhanced callback security in your settings:
+
+```python
+# M-Pesa Security Configuration
+MPESA_SECURITY = {
+    'ENABLE_HMAC_VALIDATION': True,  # Enable HMAC signature validation
+    'ENABLE_STRUCTURE_VALIDATION': True,  # Enable payload structure validation
+    'HMAC_SECRET_KEY': 'your-secret-key',  # HMAC secret (defaults to Django SECRET_KEY)
+    'CALLBACK_TIMEOUT': 300,  # Callback timeout in seconds (5 minutes)
+    'MAX_CALLBACK_RATE': 100,  # Max callbacks per minute per IP
+}
+```
+
+### Callback Security Usage
+
+```python
+from mpesa.callback_security import EnhancedCallbackSecurity
+
+# Initialize security system
+security = EnhancedCallbackSecurity(
+    enable_hmac=True,
+    enable_structure_validation=True
+)
+
+# Validate incoming callback
+result = security.validate_callback(request, view)
+
+if result['overall_status'] == 'approved':
+    # Process callback
+    process_mpesa_callback(request.data)
+else:
+    # Reject callback
+    return Response({'error': 'Security validation failed'}, status=403)
+```
 
 ## API Endpoints
 

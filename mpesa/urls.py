@@ -44,7 +44,7 @@ urlpatterns = [
     path("checkout/", views.MpesaCheckout.as_view(), name="checkout"),
     # STK push initiation endpoint (called by frontend JavaScript)
     
-    path("callback/", views.MpesaCallBack.as_view(), name="callback"),  
+    path("callback0126bT36857/", views.MpesaCallBack.as_view(), name="callback"),  
     # Payment callback endpoint (called by Safaricom servers)
     
     path("stk-query/", views.MpesaStkQuery.as_view(), name="stk_query"),

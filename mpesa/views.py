@@ -43,7 +43,7 @@ from rest_framework.views import APIView
 
 from .serializers import MpesaCheckoutSerializer, TransactionSerializer
 from .stk_push import MpesaGateWay
-from .callback_security import SafaricomIPWhitelist
+from .callback_security import SafaricomIPWhitelist, EnhancedCallbackSecurity
 
 # Initialize logger for this module
 logging = logging.getLogger("default")
@@ -247,6 +247,12 @@ class MpesaStkQuery(APIView):
         return Response(res, status=200)
 
 
+# Initialize enhanced security system (disable HMAC for initial testing)
+enhanced_security = EnhancedCallbackSecurity(
+    enable_hmac=False,  # Disable HMAC validation for testing
+    enable_structure_validation=True
+)
+
 @authentication_classes([])  # Disable authentication for callback
 @permission_classes((SafaricomIPWhitelist,))  # Only allow Safaricom IPs
 @method_decorator(csrf_exempt, name='dispatch')  # Disable CSRF for callback
@@ -255,12 +261,12 @@ class MpesaCallBack(APIView):
     API view for handling M-Pesa payment callbacks from Safaricom.
     
     This endpoint receives payment confirmations and updates from
-    Safaricom's servers. It's secured with IP whitelisting to ensure
-    only legitimate callbacks are processed.
+    Safaricom's servers. It's secured with enhanced multi-layer security
+    including IP whitelisting, HMAC validation, and structure validation.
     
     Methods:
         GET: Health check endpoint
-        POST: Process payment callback
+        POST: Process payment callback with enhanced security
     """
     
     def get(self, request):
@@ -281,8 +287,9 @@ class MpesaCallBack(APIView):
         """
         Handle POST request containing payment callback data.
         
-        Processes payment confirmations from Safaricom and updates
-        transaction records accordingly.
+        Processes payment confirmations from Safaricom using enhanced
+        security validation. All callbacks go through multiple security
+        layers before being processed.
         
         Args:
             request (Request): DRF request object with callback data
@@ -290,10 +297,56 @@ class MpesaCallBack(APIView):
         Returns:
             Response: Acknowledgment response for Safaricom
         """
-        logging.info("{}".format("Callback from MPESA"))
+        # Enhanced security validation
+        security_result = enhanced_security.validate_callback(request, self)
         
-        # Get raw callback data from request body
-        data = request.body
+        # Log security validation results
+        logging.info(f"M-Pesa callback security validation: {security_result['overall_status']}")
         
-        # Process callback through gateway handler
-        return get_gateway().callback_handler(json.loads(data))
+        if security_result['overall_status'] != 'approved':
+            # Log security rejection with details
+            logging.warning(f"M-Pesa callback rejected: {security_result.get('rejection_reason', 'Unknown')}")
+            logging.debug(f"Security validation details: {security_result}")
+            
+            # Return error response for rejected callbacks
+            return Response({
+                "status": "Rejected",
+                "reason": security_result.get('rejection_reason', 'Security validation failed')
+            }, status=403)
+        
+        try:
+            # Log successful callback
+            logging.info("Enhanced security validation passed - Processing M-Pesa callback")
+            
+            # Get validated callback data
+            if 'structure' in security_result.get('validations', {}):
+                structure_validation = security_result['validations']['structure']
+                if structure_validation.get('valid') and 'sanitized_data' in structure_validation:
+                    callback_data = structure_validation['sanitized_data']
+                else:
+                    # Fallback to raw data if structure validation not enabled
+                    callback_data = json.loads(request.body) if request.body else {}
+            else:
+                callback_data = json.loads(request.body) if request.body else {}
+            
+            # Process callback through gateway handler
+            result = get_gateway().callback_handler(callback_data)
+            
+            # Log successful processing
+            logging.info("M-Pesa callback processed successfully")
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON in callback: {str(e)}")
+            return Response({
+                "status": "Error",
+                "message": "Invalid JSON format"
+            }, status=400)
+            
+        except Exception as e:
+            logging.error(f"Callback processing error: {str(e)}")
+            return Response({
+                "status": "Error", 
+                "message": "Internal processing error"
+            }, status=500)

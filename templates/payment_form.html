@@ -16,7 +16,7 @@
             <div class="invalid-feedback">Please enter a valid phone number</div>
         </div>
         
-        <div class="col-12">
+        <div class="col-12 mt-2">
             <label for="amount" class="form-label mb-1">
                 <i class="fas fa-money-bill-wave"></i> Amount
             </label>
@@ -29,7 +29,7 @@
             <div class="invalid-feedback">Please enter a valid amount</div>
         </div>
         
-        <div class="col-md-6">
+        <div class="col-md-6 mt-2">
             <label for="reference" class="form-label mb-1">
                 <i class="fas fa-hashtag"></i> Reference
             </label>
@@ -38,7 +38,7 @@
             <div class="form-text small">Optional</div>
         </div>
         
-        <div class="col-md-6">
+        <div class="col-md-6 mt-2">
             <label for="description" class="form-label mb-1">
                 <i class="fas fa-comment-alt"></i> Description
             </label>
@@ -48,14 +48,14 @@
         </div>
     </div>
     
-    <div class="d-grid mt-4">
+    <div class="d-grid mt-3">
         <button type="submit" class="btn btn-mpesa btn-lg" id="pay-btn">
             <i class="fas fa-credit-card me-2"></i>
             <span>Pay with M-Pesa</span>
         </button>
     </div>
     
-    <div class="text-center mt-3">
+    <div class="text-center mt-2">
         <small class="text-muted">
             <i class="fas fa-shield-alt me-1"></i>
             Secured by 256-bit SSL encryption
@@ -65,34 +65,34 @@
 
 <!-- Payment Status Modal -->
 <div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
+            <div class="modal-header py-2">
+                <h6 class="modal-title mb-0">
                     <i class="fas fa-mobile-alt me-2"></i>
                     Payment Status
-                </h5>
+                </h6>
             </div>
-            <div class="modal-body text-center">
+            <div class="modal-body text-center py-3">
                 <div id="status-content">
                     <!-- Status content will be dynamically inserted here -->
                 </div>
                 
                 <!-- Progress Container -->
                 <div class="progress-container" id="progress-container" style="display: none;">
-                    <div class="progress mb-3" style="height: 8px;">
+                    <div class="progress mb-2" style="height: 6px;">
                         <div class="progress-bar" role="progressbar" style="width: 0%" 
                              aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" id="progress-bar"></div>
                     </div>
                     <div class="timer-display" id="timer-display">Checking payment status...</div>
-                    <div class="text-muted small mt-2">
+                    <div class="text-muted small mt-1">
                         <i class="fas fa-info-circle me-1"></i>
-                        Please complete the payment on your phone
+                        Complete payment on your phone
                     </div>
                 </div>
             </div>
-            <div class="modal-footer border-0 justify-content-center" id="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="close-btn" style="display: none;">
+            <div class="modal-footer border-0 justify-content-center py-2" id="modal-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal" id="close-btn" style="display: none;">
                     <i class="fas fa-times me-2"></i>Close
                 </button>
             </div>
@@ -471,10 +471,10 @@
         showStatusModal() {
             const modal = new bootstrap.Modal(document.getElementById('statusModal'));
             document.getElementById('status-content').innerHTML = `
-            <div class="status-pending mb-4">
+            <div class="status-pending mb-3">
                 <div class="status-icon">
                     <div class="position-relative">
-                        <i class="fas fa-mobile-alt fa-4x text-primary"></i>
+                        <i class="fas fa-mobile-alt fa-3x text-primary"></i>
                         <div class="position-absolute top-0 start-100 translate-middle">
                             <span class="badge bg-success rounded-pill animate-pulse">
                                 <i class="fas fa-bell fa-xs"></i>
@@ -483,45 +483,31 @@
                     </div>
                 </div>
             </div>
-            <h4 class="fw-bold mb-3">Payment Request Sent</h4>
-            <p class="text-muted mb-4">Check your phone for the M-Pesa prompt and enter your PIN to complete the payment</p>
+            <h5 class="fw-bold mb-2">Payment Request Sent</h5>
+            <p class="text-muted mb-3 small">Check your phone for M-Pesa prompt and enter PIN</p>
             
-            <!-- Enhanced Step Indicator -->
-            <div class="payment-steps mb-4">
-                <div class="d-flex justify-content-center align-items-center gap-2 mb-3">
+            <!-- Compact Step Indicator -->
+            <div class="payment-steps mb-3">
+                <div class="d-flex justify-content-center align-items-center gap-2 mb-2">
                     <div class="step-item active">
-                        <div class="step-circle bg-success text-white">
-                            <i class="fas fa-paper-plane fa-sm"></i>
+                        <div class="step-circle bg-success text-white" style="width: 35px; height: 35px;">
+                            <i class="fas fa-paper-plane" style="font-size: 0.8rem;"></i>
                         </div>
-                        <small class="step-label text-success">Sent</small>
+                        <small class="step-label text-success" style="font-size: 0.7rem;">Sent</small>
                     </div>
-                    <div class="step-connector active"></div>
+                    <div class="step-connector active" style="width: 40px; height: 2px;"></div>
                     <div class="step-item pending">
-                        <div class="step-circle bg-warning text-dark">
-                            <i class="fas fa-mobile-alt fa-sm"></i>
+                        <div class="step-circle bg-warning text-dark" style="width: 35px; height: 35px;">
+                            <i class="fas fa-mobile-alt" style="font-size: 0.8rem;"></i>
                         </div>
-                        <small class="step-label text-warning">Waiting</small>
+                        <small class="step-label text-warning" style="font-size: 0.7rem;">Waiting</small>
                     </div>
-                    <div class="step-connector"></div>
+                    <div class="step-connector" style="width: 40px; height: 2px;"></div>
                     <div class="step-item">
-                        <div class="step-circle bg-light text-muted">
-                            <i class="fas fa-check fa-sm"></i>
+                        <div class="step-circle bg-light text-muted" style="width: 35px; height: 35px;">
+                            <i class="fas fa-check" style="font-size: 0.8rem;"></i>
                         </div>
-                        <small class="step-label text-muted">Complete</small>
-                    </div>
-                </div>
-                
-                <div class="alert alert-info border-0 bg-light">
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-info-circle text-info me-3"></i>
-                        <div>
-                            <strong>Next Steps:</strong>
-                            <ol class="mb-0 mt-2 ps-3">
-                                <li>Check your phone for M-Pesa notification</li>
-                                <li>Enter your M-Pesa PIN</li>
-                                <li>Confirm the payment</li>
-                            </ol>
-                        </div>
+                        <small class="step-label text-muted" style="font-size: 0.7rem;">Complete</small>
                     </div>
                 </div>
             </div>
@@ -578,15 +564,15 @@
                 }
                 
                 timerDisplay.innerHTML = `
-                    <div class="fw-medium">${currentMessage}</div>
-                    <small class="text-muted">(${remainingTime}s remaining)</small>
+                    <div class="fw-medium small">${currentMessage}</div>
+                    <small class="text-muted" style="font-size: 0.75rem;">(${remainingTime}s remaining)</small>
                 `;
                 
                 if (progress >= 100) {
                     clearInterval(this.progressInterval);
                     timerDisplay.innerHTML = `
-                        <div class="fw-medium">Completing verification...</div>
-                        <small class="text-muted">Please wait</small>
+                        <div class="fw-medium small">Completing verification...</div>
+                        <small class="text-muted" style="font-size: 0.75rem;">Please wait</small>
                     `;
                 }
             }, 1000);
@@ -736,45 +722,42 @@
             this.showSuccessToast('Payment completed successfully!');
             
             document.getElementById('status-content').innerHTML = `
-            <div class="status-success mb-4">
+            <div class="status-success mb-3">
                 <div class="status-icon">
-                    <i class="fas fa-check-circle fa-4x text-success"></i>
+                    <i class="fas fa-check-circle fa-3x text-success"></i>
                 </div>
             </div>
-            <h4 class="text-success fw-bold mb-3">Payment Successful!</h4>
-            <p class="text-muted mb-4">Your payment has been processed successfully. You will receive an SMS confirmation shortly.</p>
-            <div class="bg-light rounded p-3 mb-3">
-                <small class="text-muted d-block">Transaction ID</small>
-                <strong class="text-dark">${this.checkoutRequestId || 'N/A'}</strong>
+            <h5 class="text-success fw-bold mb-2">Payment Successful!</h5>
+            <p class="text-muted mb-2 small">Payment processed successfully. SMS confirmation coming.</p>
+            <div class="bg-light rounded p-2 mb-2">
+                <small class="text-muted d-block" style="font-size: 0.7rem;">Transaction ID</small>
+                <strong class="text-dark small">${this.checkoutRequestId || 'N/A'}</strong>
             </div>
             
-            <!-- Success Steps -->
-            <div class="payment-steps">
-                <div class="d-flex justify-content-center align-items-center gap-2 mb-3">
+            <!-- Compact Success Steps -->
+            <div class="payment-steps mb-2">
+                <div class="d-flex justify-content-center align-items-center gap-1">
                     <div class="step-item active">
-                        <div class="step-circle bg-success text-white">
-                            <i class="fas fa-paper-plane fa-sm"></i>
+                        <div class="step-circle bg-success text-white" style="width: 25px; height: 25px;">
+                            <i class="fas fa-paper-plane" style="font-size: 0.6rem;"></i>
                         </div>
-                        <small class="step-label text-success">Sent</small>
                     </div>
-                    <div class="step-connector active"></div>
+                    <div class="step-connector active" style="width: 30px; height: 2px;"></div>
                     <div class="step-item active">
-                        <div class="step-circle bg-success text-white">
-                            <i class="fas fa-mobile-alt fa-sm"></i>
+                        <div class="step-circle bg-success text-white" style="width: 25px; height: 25px;">
+                            <i class="fas fa-mobile-alt" style="font-size: 0.6rem;"></i>
                         </div>
-                        <small class="step-label text-success">Confirmed</small>
                     </div>
-                    <div class="step-connector active"></div>
+                    <div class="step-connector active" style="width: 30px; height: 2px;"></div>
                     <div class="step-item active">
-                        <div class="step-circle bg-success text-white">
-                            <i class="fas fa-check fa-sm"></i>
+                        <div class="step-circle bg-success text-white" style="width: 25px; height: 25px;">
+                            <i class="fas fa-check" style="font-size: 0.6rem;"></i>
                         </div>
-                        <small class="step-label text-success">Complete</small>
                     </div>
                 </div>
             </div>
-            <div class="text-center mt-3">
-                <p class="text-muted small">Redirecting to transaction details in <span id="redirect-countdown">3</span> seconds...</p>
+            <div class="text-center">
+                <p class="text-muted small mb-0">Redirecting in <span id="redirect-countdown">3</span>s...</p>
             </div>
         `;
             document.getElementById('progress-container').style.display = 'none';
@@ -843,33 +826,29 @@
             
             console.log(`Payment ${reason}:`, data);
             document.getElementById('status-content').innerHTML = `
-            <div class="status-failed mb-4">
+            <div class="status-failed mb-3">
                 <div class="status-icon">
                     <i class="${icon}"></i>
                 </div>
             </div>
-            <h4 class="text-warning fw-bold mb-3">${title}</h4>
-            <p class="text-muted mb-4">${message}</p>
+            <h5 class="text-warning fw-bold mb-2">${title}</h5>
+            <p class="text-muted mb-2 small">${message}</p>
             
             ${data.ResultCode ? `
-            <div class="alert alert-light border">
-                <small class="text-muted d-block mb-1">M-Pesa Response Code</small>
-                <strong class="text-dark">${data.ResultCode}</strong>
+            <div class="alert alert-light border py-1 px-2 mb-2">
+                <small class="text-muted d-block mb-1" style="font-size: 0.7rem;">M-Pesa Code</small>
+                <strong class="text-dark small">${data.ResultCode}</strong>
             </div>
             ` : ''}
             
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                You can start a new payment whenever you're ready.
-            </div>
-            <div class="text-center">
-                <button class="btn btn-outline-primary" id="cancel-tryagain-btn">
-                    <i class="fas fa-redo me-2"></i>Try Again
+            <div class="text-center mb-2">
+                <button class="btn btn-outline-primary btn-sm" id="cancel-tryagain-btn">
+                    <i class="fas fa-redo me-1"></i>Try Again
                 </button>
             </div>
-            <div class="text-center mt-3">
-                <p class="text-muted small">Returning to payment form in <span id="failure-countdown">4</span> seconds... 
-                    <button class="btn btn-link btn-sm p-0 text-decoration-underline" onclick="window.mpesaPayment.stopChecking()">Cancel auto-redirect</button>
+            <div class="text-center">
+                <p class="text-muted small mb-0">Returning in <span id="failure-countdown">4</span>s... 
+                    <button class="btn btn-link btn-sm p-0 text-decoration-underline" style="font-size: 0.7rem;" onclick="window.mpesaPayment.stopChecking()">Cancel</button>
                 </p>
             </div>
         `;
@@ -886,23 +865,23 @@
             this.stopChecking();
             this.unlockForm();
             document.getElementById('status-content').innerHTML = `
-            <div class="status-failed mb-4">
+            <div class="status-failed mb-3">
                 <div class="status-icon">
-                    <i class="fas fa-clock fa-4x text-warning"></i>
+                    <i class="fas fa-clock fa-3x text-warning"></i>
                 </div>
             </div>
-            <h4 class="text-warning fw-bold mb-3">Payment Timeout</h4>
-            <p class="text-muted mb-4">You took too long to complete the payment. The payment may still be processing in the background.</p>
-            <div class="alert alert-warning">
+            <h5 class="text-warning fw-bold mb-2">Payment Timeout</h5>
+            <p class="text-muted mb-2 small">Took too long to complete. Payment may still be processing.</p>
+            <div class="alert alert-warning py-2 px-2 mb-2">
                 <i class="fas fa-exclamation-triangle me-2"></i>
-                If you completed the payment on your phone, click "Check Again" to verify the status.
+                <small>If you completed payment, click "Check Again"</small>
             </div>
-            <div class="d-flex gap-3 justify-content-center">
+            <div class="d-flex gap-2 justify-content-center">
                 <button class="btn btn-outline-primary btn-sm" id="timeout-recheck-btn">
-                    <i class="fas fa-sync me-2"></i>Check Again
+                    <i class="fas fa-sync me-1"></i>Check Again
                 </button>
                 <button class="btn btn-outline-secondary btn-sm" id="timeout-startover-btn">
-                    <i class="fas fa-redo me-2"></i>Start Over
+                    <i class="fas fa-redo me-1"></i>Start Over
                 </button>
             </div>
         `;
@@ -927,15 +906,15 @@
             this.isChecking = true;
             console.log('Starting recheck for:', this.checkoutRequestId);
             document.getElementById('status-content').innerHTML = `
-            <div class="status-pending mb-4">
+            <div class="status-pending mb-3">
                 <div class="status-icon">
-                    <div class="spinner-border text-primary" role="status">
+                    <div class="spinner-border text-primary" role="status" style="width: 2.5rem; height: 2.5rem;">
                         <span class="visually-hidden">Loading...</span>
                     </div>
                 </div>
             </div>
-            <h4 class="fw-bold mb-3">Rechecking Payment Status</h4>
-            <p class="text-muted">Please wait while we verify your payment status...</p>
+            <h5 class="fw-bold mb-2">Rechecking Payment</h5>
+            <p class="text-muted small">Verifying your payment status...</p>
         `;
             document.getElementById('close-btn').style.display = 'none';
 
@@ -1013,23 +992,19 @@
         handleRecheckResult(data) {
             this.unlockForm(); // Unlock form when recheck shows still pending
             document.getElementById('status-content').innerHTML = `
-            <div class="status-failed mb-4">
+            <div class="status-failed mb-3">
                 <div class="status-icon">
-                    <i class="fas fa-clock fa-4x text-warning"></i>
+                    <i class="fas fa-clock fa-3x text-warning"></i>
                 </div>
             </div>
-            <h4 class="text-warning fw-bold mb-3">Payment Still Pending</h4>
-            <p class="text-muted mb-4">Your payment is still being processed. This can take a few minutes.</p>
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                You can check the status again or contact support if the issue persists.
-            </div>
-            <div class="d-flex gap-3 justify-content-center">
+            <h5 class="text-warning fw-bold mb-2">Still Pending</h5>
+            <p class="text-muted mb-2 small">Payment still processing. Can take a few minutes.</p>
+            <div class="d-flex gap-2 justify-content-center mb-2">
                 <button class="btn btn-outline-primary btn-sm" id="recheck-btn">
-                    <i class="fas fa-sync me-2"></i>Check Again
+                    <i class="fas fa-sync me-1"></i>Check Again
                 </button>
                 <button class="btn btn-outline-secondary btn-sm" id="new-payment-btn">
-                    <i class="fas fa-redo me-2"></i>New Payment
+                    <i class="fas fa-redo me-1"></i>New Payment
                 </button>
             </div>
         `;
@@ -1042,19 +1017,19 @@
         handleRecheckError() {
             this.unlockForm(); // Unlock form on recheck error
             document.getElementById('status-content').innerHTML = `
-            <div class="status-failed mb-4">
+            <div class="status-failed mb-3">
                 <div class="status-icon">
-                    <i class="fas fa-exclamation-triangle fa-4x text-danger"></i>
+                    <i class="fas fa-exclamation-triangle fa-3x text-danger"></i>
                 </div>
             </div>
-            <h4 class="text-danger fw-bold mb-3">Check Failed</h4>
-            <p class="text-muted mb-4">Unable to verify payment status due to a network error.</p>
-            <div class="d-flex gap-3 justify-content-center">
+            <h5 class="text-danger fw-bold mb-2">Check Failed</h5>
+            <p class="text-muted mb-2 small">Unable to verify due to network error.</p>
+            <div class="d-flex gap-2 justify-content-center">
                 <button class="btn btn-outline-primary btn-sm" id="retry-recheck-btn">
-                    <i class="fas fa-sync me-2"></i>Try Again
+                    <i class="fas fa-sync me-1"></i>Try Again
                 </button>
                 <button class="btn btn-outline-secondary btn-sm" id="close-modal-btn">
-                    <i class="fas fa-times me-2"></i>Close
+                    <i class="fas fa-times me-1"></i>Close
                 </button>
             </div>
         `;

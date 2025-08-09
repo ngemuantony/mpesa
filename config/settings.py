@@ -22,7 +22,7 @@ environ.Env.read_env(BASE_DIR / '.env')
 SECRET_KEY = 'django-insecure-vj=%9ue*gsi59swh+$3xd2+g^4%lj)21yq)yp3o4(ls4icxw*x'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = [
     '127.0.0.1', 'localhost',
@@ -130,7 +130,50 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+import os
+
+# URL prefix for static files
+STATIC_URL = '/static/'
+
+# Absolute path to the directory static files should be collected to
+# This is used in production with 'python manage.py collectstatic'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Additional locations of static files
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),  # Project-level static files
+]
+
+# Static files finders - how Django finds static files
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+
+# Media files (uploaded files)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Static files storage backend
+# For production, consider using WhiteNoise or cloud storage
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
+# Security settings for static files
+SECURE_STATIC_FILES = True
+
+# Cache control for static files (useful for production)
+if not DEBUG:
+    try:
+        import whitenoise
+        # Use WhiteNoise for serving static files in production
+        STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        
+        # Add WhiteNoise to middleware
+        MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+    except ImportError:
+        # WhiteNoise not installed, use default storage
+        print("Warning: WhiteNoise not installed. Using default static files storage.")
+        STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

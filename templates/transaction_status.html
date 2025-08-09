@@ -3,29 +3,29 @@
 {% block title %}Transaction Details{% endblock %}
 
 {% block content %}
-<div class="text-center mb-5">
-    <div class="mb-4">
+<div class="text-center mb-3 mb-md-4">
+    <div class="mb-3">
         {% if transaction.is_successful %}
             <div class="status-success">
-                <i class="fas fa-check-circle fa-4x mb-3"></i>
+                <i class="fas fa-check-circle fa-3x mb-2"></i>
             </div>
-            <h3 class="text-success fw-bold">Payment Successful</h3>
+            <h4 class="text-success fw-bold mb-2">Payment Successful</h4>
         {% elif transaction.is_pending %}
             <div class="status-pending">
-                <i class="fas fa-clock fa-4x mb-3"></i>
+                <i class="fas fa-clock fa-3x mb-2"></i>
             </div>
-            <h3 class="text-warning fw-bold">Payment Pending</h3>
+            <h4 class="text-warning fw-bold mb-2">Payment Pending</h4>
         {% else %}
             <div class="status-failed">
-                <i class="fas fa-times-circle fa-4x mb-3"></i>
+                <i class="fas fa-times-circle fa-3x mb-2"></i>
             </div>
-            <h3 class="text-danger fw-bold">Payment Failed</h3>
+            <h4 class="text-danger fw-bold mb-2">Payment Failed</h4>
         {% endif %}
     </div>
-    <p class="text-muted">Transaction completed on {{ transaction.created|date:"M d, Y \a\t H:i" }}</p>
+    <p class="text-muted small">Transaction completed on {{ transaction.created|date:"M d, Y \a\t H:i" }}</p>
 </div>
 
-<div class="row g-4 mb-5">
+<div class="row g-3 mb-4">
     <div class="col-md-6">
         <div class="card h-100">
             <div class="card-header bg-light">
@@ -125,13 +125,13 @@
     </div>
 </div>
 
-<div class="d-grid gap-3">
-    <a href="{% url 'payment_form' %}" class="btn btn-mpesa btn-lg">
+<div class="d-grid gap-2">
+    <a href="{% url 'payment_form' %}" class="btn btn-mpesa">
         <i class="fas fa-plus me-2"></i>Make Another Payment
     </a>
     
     {% if transaction.is_successful %}
-    <button class="btn btn-outline-secondary" onclick="window.print()">
+    <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
         <i class="fas fa-print me-2"></i>Print Receipt
     </button>
     {% endif %}

@@ -111,6 +111,51 @@ def transaction_status(request, checkout_request_id):
         })
 
 
+def transaction_receipt_print(request, checkout_request_id):
+    """
+    Display print-friendly transaction receipt for a specific payment.
+    
+    Renders a clean, print-optimized version of the transaction receipt
+    without navigation elements or Bootstrap CSS that interferes with printing.
+    
+    Args:
+        request (HttpRequest): Django HTTP request object
+        checkout_request_id (str): M-Pesa checkout request identifier
+        
+    Returns:
+        HttpResponse: Rendered print-friendly receipt page or error page
+    """
+    try:
+        from .models import Transaction
+        # Retrieve transaction by checkout request ID
+        transaction = Transaction.objects.get(checkout_request_id=checkout_request_id)
+        
+        # Log receipt access for security monitoring
+        logger.info(
+            f"Receipt accessed for transaction {checkout_request_id[:12]}...",
+            extra={
+                'transaction_id': hashlib.sha256(checkout_request_id.encode()).hexdigest()[:16],
+                'client_ip': hashlib.sha256(
+                    request.META.get('REMOTE_ADDR', '').encode()
+                ).hexdigest()[:16],
+                'user_agent_hash': hashlib.sha256(
+                    request.META.get('HTTP_USER_AGENT', '').encode()
+                ).hexdigest()[:16]
+            }
+        )
+        
+        return render(request, 'transaction_receipt_print.html', {'transaction': transaction})
+    except Transaction.DoesNotExist:
+        # Handle case where transaction is not found
+        logger.warning(
+            f"Receipt requested for non-existent transaction {checkout_request_id[:12]}...",
+            extra={'client_ip': request.META.get('REMOTE_ADDR', 'unknown')}
+        )
+        return render(request, 'payment_form.html', {
+            'error': 'Transaction not found'
+        })
+
+
 @authentication_classes([])  # Disable authentication for public API
 @permission_classes((AllowAny,))  # Allow access without authentication
 class MpesaCheckout(APIView):

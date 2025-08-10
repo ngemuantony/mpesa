@@ -40,11 +40,14 @@ urlpatterns = [
     path("status/<str:checkout_request_id>/", views.transaction_status, name="transaction_status"),
     # Transaction status page showing payment results
     
+    path("receipt/<str:checkout_request_id>/", views.transaction_receipt_print, name="transaction_receipt_print"),
+    # Print-friendly transaction receipt page
+    
     # API endpoint URLs for M-Pesa integration
     path("checkout/", views.MpesaCheckout.as_view(), name="checkout"),
     # STK push initiation endpoint (called by frontend JavaScript)
     
-    path("callback0126bT36857/", views.MpesaCallBack.as_view(), name="callback"),  
+    path("callback/", views.MpesaCallBack.as_view(), name="callback"),  
     # Payment callback endpoint (called by Safaricom servers)
     
     path("stk-query/", views.MpesaStkQuery.as_view(), name="stk_query"),

@@ -85,9 +85,9 @@ credentials-file: /path/to/credentials.json
 
 ingress:
   - hostname: www.digilaboratory.org
-    service: http://localhost:8000
+    service: http://localhost:5000
   - hostname: digilaboratory.org
-    service: http://localhost:8000
+    service: http://localhost:5000
   - service: http_status:404
 ```
 

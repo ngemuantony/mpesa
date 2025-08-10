@@ -126,22 +126,14 @@
 </div>
 
 <div class="d-grid gap-2">
-    <a href="{% url 'payment_form' %}" class="btn btn-mpesa">
+    <a href="/payments/" class="btn btn-mpesa">
         <i class="fas fa-plus me-2"></i>Make Another Payment
     </a>
     
     {% if transaction.is_successful %}
-    <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+    <a href="/payments/receipt/{{ transaction.checkout_request_id }}/" class="btn btn-outline-secondary btn-sm" target="_blank">
         <i class="fas fa-print me-2"></i>Print Receipt
-    </button>
+    </a>
     {% endif %}
 </div>
-
-<style>
-@media print {
-    .btn, .card-header { display: none !important; }
-    .card { border: 1px solid #ddd !important; box-shadow: none !important; }
-    body { background: white !important; }
-}
-</style>
 {% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Access Forbidden{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 text-center">
+            <div class="error-page">
+                <h1 class="display-1 text-danger">403</h1>
+                <h2 class="mb-4">Access Forbidden</h2>
+                <p class="lead">You don't have permission to access this resource.</p>
+                <p class="text-muted">If you believe this is an error, please contact support.</p>
+                <div class="mt-4">
+                    <a href="/payments/" class="btn btn-primary">Return to Payment Form</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.error-page {
+    padding: 2rem;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.display-1 {
+    font-size: 8rem;
+    font-weight: 300;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+}
+
+.error-page h2 {
+    color: #343a40;
+    font-weight: 600;
+}
+
+.error-page .lead {
+    color: #6c757d;
+    font-size: 1.25rem;
+}
+
+.error-page .text-muted {
+    font-size: 0.95rem;
+}
+</style>
+{% endblock %}

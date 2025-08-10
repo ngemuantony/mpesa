@@ -7,8 +7,9 @@
     <title>{% block title %}M-Pesa Payment Gateway{% endblock %}</title>
     <meta name="csrf-token" content="{{ csrf_token }}">
     
-    <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+    <!-- Logo with fallback -->
+    <link rel="icon" href="{% static 'images/logo.png' %}" type="image/png">
+    <link rel="shortcut icon" href="{% static 'images/logo.png' %}" type="image/png">
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
@@ -77,7 +78,7 @@
             background: var(--gradient-mpesa);
         }
         
-        .mpesa-logo {
+        .mpesa-text-logo {
             background: var(--gradient-mpesa);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -86,6 +87,56 @@
             font-size: 2.2rem;
             letter-spacing: -0.02em;
             margin-bottom: 0.25rem;
+        }
+        
+        .mpesa-logo-img {
+            max-width: 150px;
+            max-height: 100px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 166, 81, 0.2);
+            transition: var(--transition);
+        }
+        
+        .mpesa-logo-img:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 166, 81, 0.3);
+        }
+        
+        .logo-container {
+            margin-bottom: 1rem;
+        }
+        
+        .css-logo-fallback {
+            margin-bottom: 1rem;
+        }
+        
+        .css-mpesa-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: linear-gradient(135deg, #00a651 0%, #00d25b 100%);
+            border-radius: 15px;
+            color: white;
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(0, 166, 81, 0.3);
+            max-width: 200px;
+            margin: 0 auto;
+        }
+        
+        .logo-icon {
+            font-size: 2rem;
+        }
+        
+        .logo-text {
+            font-family: 'Inter', sans-serif;
         }
         
         .subtitle {
@@ -520,7 +571,23 @@
             <div class="col-lg-5 col-md-7 col-sm-9 col-11">
                 <div class="payment-card p-3 p-sm-4 p-md-5 page-transition">
                     <div class="text-center mb-2 mb-sm-3 mb-md-4">
-                        <div class="mpesa-logo">
+                        <!-- Primary Logo (Image) -->
+                        <div class="logo-container mb-3">
+                            <img src="{% static 'images/logo.png' %}" alt="M-Pesa Logo" class="mpesa-logo-img" 
+                                 onerror="this.style.display='none'; document.querySelector('.css-logo-fallback').style.display='block';"
+                                 onload="document.querySelector('.css-logo-fallback').style.display='none';">
+                        </div>
+                        
+                        <!-- CSS Fallback Logo -->
+                        <div class="css-logo-fallback" style="display: none;">
+                            <div class="css-mpesa-logo">
+                                <div class="logo-icon">📱</div>
+                                <div class="logo-text">M-PESA</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Text Logo (Always Visible) -->
+                        <div class="mpesa-text-logo">
                             <i class="fas fa-mobile-alt"></i> M-PESA
                         </div>
                         <p class="subtitle mb-2 mb-sm-3">Secure Mobile Money Payment Gateway</p>

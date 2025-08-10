@@ -8,7 +8,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 def home_redirect(request):
-    return redirect('payment_form')
+    return redirect('/payments/')
 
 urlpatterns = [
     path('', home_redirect, name='home'),

@@ -32,6 +32,7 @@ Date: 2024
 
 import json
 import logging
+import hashlib
 
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
@@ -45,8 +46,9 @@ from .serializers import MpesaCheckoutSerializer, TransactionSerializer
 from .stk_push import MpesaGateWay
 from .callback_security import SafaricomIPWhitelist, EnhancedCallbackSecurity
 
-# Initialize logger for this module
-logging = logging.getLogger("default")
+# Initialize secure loggers
+logger = logging.getLogger("mpesa")
+security_logger = logging.getLogger("mpesa.security")
 
 
 def get_gateway():
@@ -300,23 +302,32 @@ class MpesaCallBack(APIView):
         # Enhanced security validation
         security_result = enhanced_security.validate_callback(request, self)
         
-        # Log security validation results
-        logging.info(f"M-Pesa callback security validation: {security_result['overall_status']}")
+        # Log security validation results (securely)
+        client_ip_hash = hashlib.sha256(
+            enhanced_security.ip_whitelist.get_client_ip(request).encode()
+        ).hexdigest()[:16]
+        
+        security_logger.info("M-Pesa callback security validation completed", extra={
+            'status': security_result['overall_status'],
+            'client_ip_hash': client_ip_hash
+        })
         
         if security_result['overall_status'] != 'approved':
-            # Log security rejection with details
-            logging.warning(f"M-Pesa callback rejected: {security_result.get('rejection_reason', 'Unknown')}")
-            logging.debug(f"Security validation details: {security_result}")
+            # Log security rejection without exposing details
+            security_logger.warning("M-Pesa callback rejected by security validation", extra={
+                'client_ip_hash': client_ip_hash,
+                'rejection_reason': security_result.get('rejection_reason', 'Unknown')
+            })
             
-            # Return error response for rejected callbacks
+            # Return generic error response
             return Response({
                 "status": "Rejected",
-                "reason": security_result.get('rejection_reason', 'Security validation failed')
+                "reason": "Security validation failed"
             }, status=403)
         
         try:
-            # Log successful callback
-            logging.info("Enhanced security validation passed - Processing M-Pesa callback")
+            # Log successful security validation
+            logger.info("Enhanced security validation passed - Processing M-Pesa callback")
             
             # Get validated callback data
             if 'structure' in security_result.get('validations', {}):
@@ -332,20 +343,20 @@ class MpesaCallBack(APIView):
             # Process callback through gateway handler
             result = get_gateway().callback_handler(callback_data)
             
-            # Log successful processing
-            logging.info("M-Pesa callback processed successfully")
+            # Log successful processing (without sensitive data)
+            logger.info("M-Pesa callback processed successfully")
             
             return result
             
         except json.JSONDecodeError as e:
-            logging.error(f"Invalid JSON in callback: {str(e)}")
+            logger.error("Invalid JSON in callback payload")
             return Response({
                 "status": "Error",
-                "message": "Invalid JSON format"
+                "message": "Invalid request format"
             }, status=400)
             
         except Exception as e:
-            logging.error(f"Callback processing error: {str(e)}")
+            logger.error("Callback processing error occurred")
             return Response({
                 "status": "Error", 
                 "message": "Internal processing error"

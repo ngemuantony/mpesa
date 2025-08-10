@@ -2,6 +2,10 @@
 from .phone_number_validation import validate_possible_number
 from rest_framework import serializers
 from django.core.exceptions import ValidationError
+import re
+import html
+import bleach
+from decimal import Decimal, InvalidOperation
 
 from . import models
 
@@ -28,12 +32,7 @@ class MpesaCheckoutSerializer(serializers.ModelSerializer):
 
     def validate_phone_number(self, phone_number):
         """
-        Validate and normalize phone number for M-Pesa compatibility.
-        
-        Performs the following transformations:
-        - Removes non-digit characters (except +)
-        - Converts local format (07XX) to international (254XX)
-        - Validates using Kenya phone number rules
+        Validate and normalize phone number for M-Pesa compatibility with security checks.
         
         Args:
             phone_number (str): Raw phone number input
@@ -44,10 +43,16 @@ class MpesaCheckoutSerializer(serializers.ModelSerializer):
         Raises:
             serializers.ValidationError: If phone number is invalid
         """
-        import re
-        
-        # Convert to string and remove whitespace
+        # Input sanitization
         phone_number = str(phone_number).strip()
+        
+        # Security: Prevent injection attacks by limiting input length
+        if len(phone_number) > 20:
+            raise serializers.ValidationError("Phone number too long")
+        
+        # Security: Only allow digits, +, spaces, hyphens, and parentheses
+        if not re.match(r'^[\d\s\-\(\)\+]+$', phone_number):
+            raise serializers.ValidationError("Phone number contains invalid characters")
         
         # Remove any non-digit characters except + symbol
         phone_number = re.sub(r'[^\d+]', '', phone_number)
@@ -65,85 +70,117 @@ class MpesaCheckoutSerializer(serializers.ModelSerializer):
             result = validate_possible_number(phone_number, "KE")
             return phone_number  # Return the processed phone number
         except ValidationError as e:
-            raise serializers.ValidationError("Phone number is not valid")
+            raise serializers.ValidationError("Invalid phone number format")
         except Exception as e:
-            raise serializers.ValidationError(f"Phone number validation error: {str(e)}")
+            raise serializers.ValidationError("Phone number validation failed")
 
     def validate_amount(self, amount):
         """
-        Validate payment amount is within acceptable range.
-        
-        M-Pesa has specific limits on transaction amounts. This method ensures
-        the amount is positive and within reasonable bounds.
+        Validate payment amount with security checks.
         
         Args:
             amount (str/float): Payment amount to validate
             
         Returns:
-            str/float: Validated amount
+            Decimal: Validated amount
             
         Raises:
             serializers.ValidationError: If amount is invalid or out of range
         """
         try:
-            # Convert to float for validation
-            amount_float = float(amount)
+            # Convert to Decimal for precise financial calculations
+            amount_decimal = Decimal(str(amount))
             
-            # Check minimum amount (must be greater than 0)
-            if amount_float <= 0:
-                raise serializers.ValidationError(
-                    "Amount must be greater than Zero"
-                )
+            # Security: Check for negative amounts
+            if amount_decimal <= 0:
+                raise serializers.ValidationError("Amount must be greater than zero")
                 
-            # Optional: Add maximum amount check for M-Pesa limits
-            if amount_float > 300000:  # KES 300,000 M-Pesa limit
-                raise serializers.ValidationError(
-                    "Amount cannot exceed KES 300,000"
-                )
+            # Security: Check for unreasonably large amounts (prevent overflow)
+            if amount_decimal > Decimal('999999.99'):
+                raise serializers.ValidationError("Amount exceeds maximum limit")
                 
-        except (ValueError, TypeError):
-            raise serializers.ValidationError(
-                "Amount must be a valid number"
-            )
-        return amount
+            # M-Pesa specific validation (KES 300,000 limit)
+            if amount_decimal > Decimal('300000.00'):
+                raise serializers.ValidationError("Amount exceeds M-Pesa transaction limit")
+                
+            # Check minimum amount (KES 1)
+            if amount_decimal < Decimal('1.00'):
+                raise serializers.ValidationError("Minimum amount is KES 1")
+                
+            # Check decimal places (max 2 for currency)
+            if amount_decimal.as_tuple().exponent < -2:
+                raise serializers.ValidationError("Amount cannot have more than 2 decimal places")
+                
+            return amount_decimal
+            
+        except (InvalidOperation, ValueError):
+            raise serializers.ValidationError("Invalid amount format")
+        except Exception:
+            raise serializers.ValidationError("Amount validation failed")
 
     def validate_reference(self, reference):
         """
-        Validate and provide default value for payment reference.
-        
-        The reference field helps customers and merchants track payments.
-        If no reference is provided, a default "Test" value is used.
+        Validate and sanitize payment reference with security checks.
         
         Args:
             reference (str): Optional payment reference
             
         Returns:
-            str: Validated reference or default value
+            str: Validated and sanitized reference
         """
-        if reference and reference.strip():
-            # Return trimmed reference if provided
-            return reference.strip()
-        # Return default reference for testing
-        return "Test"
+        if not reference:
+            return "Payment"  # Default reference
+        
+        # Convert to string and sanitize
+        reference = str(reference).strip()
+        
+        # Security: Limit length to prevent abuse
+        if len(reference) > 50:
+            raise serializers.ValidationError("Reference too long (max 50 characters)")
+        
+        # Security: Remove HTML and script tags
+        reference = bleach.clean(reference, tags=[], attributes={}, strip=True)
+        
+        # Security: Escape HTML entities
+        reference = html.escape(reference)
+        
+        # Security: Only allow alphanumeric, spaces, hyphens, and underscores
+        if not re.match(r'^[a-zA-Z0-9\s\-_\.]+$', reference):
+            raise serializers.ValidationError("Reference contains invalid characters")
+            
+        return reference
 
     def validate_description(self, description):
         """
-        Validate and provide default value for payment description.
-        
-        The description helps identify what the payment is for.
-        If no description is provided, a default "Test" value is used.
+        Validate and sanitize payment description with security checks.
         
         Args:
             description (str): Optional payment description
             
         Returns:
-            str: Validated description or default value
+            str: Validated and sanitized description
         """
-        if description and description.strip():
-            # Return trimmed description if provided
-            return description.strip()
-        # Return default description for testing
-        return "Test"
+        if not description:
+            return "Payment"  # Default description
+        
+        # Convert to string and sanitize
+        description = str(description).strip()
+        
+        # Security: Limit length to prevent abuse
+        if len(description) > 100:
+            raise serializers.ValidationError("Description too long (max 100 characters)")
+        
+        # Security: Remove HTML and script tags
+        description = bleach.clean(description, tags=[], attributes={}, strip=True)
+        
+        # Security: Escape HTML entities
+        description = html.escape(description)
+        
+        # Security: Only allow alphanumeric, spaces, and basic punctuation
+        if not re.match(r'^[a-zA-Z0-9\s\-_\.\,\!\?]+$', description):
+            raise serializers.ValidationError("Description contains invalid characters")
+            
+        return description
 
 
 class TransactionSerializer(serializers.ModelSerializer):

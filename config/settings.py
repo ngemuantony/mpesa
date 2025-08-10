@@ -22,7 +22,42 @@ environ.Env.read_env(BASE_DIR / '.env')
 SECRET_KEY = 'django-insecure-vj=%9ue*gsi59swh+$3xd2+g^4%lj)21yq)yp3o4(ls4icxw*x'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = env.bool('DEBUG', default=False)
+
+# Custom error pages - prevent information disclosure
+ADMINS = []  # Don't expose admin emails
+MANAGERS = []
+
+# Security headers and configurations
+# Special handling for Cloudflare tunnels
+CLOUDFLARE_TUNNEL = env.bool('CLOUDFLARE_TUNNEL', default=True)
+
+if CLOUDFLARE_TUNNEL:
+    # When using Cloudflare tunnels, disable Django's SSL redirect
+    # Cloudflare handles HTTPS termination
+    SECURE_SSL_REDIRECT = False
+    # Trust Cloudflare's proxy headers
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    USE_X_FORWARDED_HOST = True
+    USE_X_FORWARDED_PORT = True
+else:
+    # Traditional deployment without Cloudflare tunnels
+    SECURE_SSL_REDIRECT = not DEBUG
+
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True if not DEBUG else False
+SECURE_HSTS_PRELOAD = True if not DEBUG else False
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_HTTPONLY = not DEBUG
+SESSION_COOKIE_HTTPONLY = not DEBUG
+SESSION_EXPIRE_AT_BROWSER_CLOSE = not DEBUG
+
+# Disable server tokens and version disclosure
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
 ALLOWED_HOSTS = [
     '127.0.0.1', 'localhost',
@@ -181,17 +216,118 @@ if not DEBUG:
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Proxy and IP detection settings
-# These help when the application is behind a reverse proxy (nginx, Apache, load balancer, etc.)
+# Cloudflare tunnel specific configurations
+if CLOUDFLARE_TUNNEL:
+    # Cloudflare IPs that we trust (some common ones)
+    ALLOWED_PROXY_IPS = [
+        '127.0.0.1', '::1',  # Local
+        # Cloudflare IP ranges (add more as needed)
+        '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+        '104.16.0.0/13', '104.24.0.0/14', '108.162.192.0/18',
+        '131.0.72.0/22', '141.101.64.0/18', '162.158.0.0/15',
+        '172.64.0.0/13', '173.245.48.0/20', '188.114.96.0/20',
+        '190.93.240.0/20', '197.234.240.0/22', '198.41.128.0/17',
+    ]
+    
+    # Headers that Cloudflare sends
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    USE_X_FORWARDED_HOST = True
+    USE_X_FORWARDED_PORT = True
+    
+    # Trust Cloudflare's real IP header
+    REAL_IP_HEADER = 'HTTP_CF_CONNECTING_IP'
+else:
+    # Traditional proxy setup
+    ALLOWED_PROXY_IPS = ['127.0.0.1', '::1']
 
-# If you're using a reverse proxy, set this to the number of proxies
-# USE_X_FORWARDED_HOST = True
-# USE_X_FORWARDED_PORT = True
+# Logging configuration - secure and production-ready
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+        'security': {
+            'format': 'SECURITY {levelname} {asctime} {message}',
+            'style': '{',
+        },
+    },
+    'filters': {
+        'require_debug_false': {
+            '()': 'django.utils.log.RequireDebugFalse',
+        },
+        'require_debug_true': {
+            '()': 'django.utils.log.RequireDebugTrue',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'filters': ['require_debug_true'],
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
+        'file': {
+            'level': 'WARNING',
+            'filters': ['require_debug_false'],
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'django.log',
+            'maxBytes': 1024*1024*10,  # 10MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'security_file': {
+            'level': 'WARNING',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'security.log',
+            'maxBytes': 1024*1024*5,  # 5MB
+            'backupCount': 10,
+            'formatter': 'security',
+        },
+        'null': {
+            'class': 'logging.NullHandler',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['security_file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'mpesa': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO' if DEBUG else 'WARNING',
+            'propagate': False,
+        },
+        'mpesa.security': {
+            'handlers': ['security_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Silence noisy loggers in production
+        'django.request': {
+            'handlers': ['null'] if not DEBUG else ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+    'root': {
+        'handlers': ['console'] if DEBUG else ['file'],
+        'level': 'INFO',
+    },
+}
 
-# For IP detection behind proxies
-# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-# If running behind a single proxy (like nginx), uncomment:
-# USE_X_FORWARDED_HOST = True
-
-# If you know your proxy IPs, you can set them here (for security)
-# ALLOWED_PROXY_IPS = ['127.0.0.1', '::1']  # Add your proxy server IPs
+# Create logs directory
+import os
+os.makedirs(BASE_DIR / 'logs', exist_ok=True)

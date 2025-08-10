@@ -44,6 +44,10 @@ from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework import status
 
+# Initialize secure logger
+security_logger = logging.getLogger('mpesa.security')
+logger = logging.getLogger('mpesa')
+
 
 class SafaricomIPWhitelist(BasePermission):
     """
@@ -134,7 +138,12 @@ class SafaricomIPWhitelist(BasePermission):
         }
         
         # Log callback attempt
-        logging.info(f"M-Pesa callback security check - IP: {client_ip}, Path: {request_path}")
+        security_logger.info("M-Pesa callback security validation initiated", extra={
+            'client_ip': client_ip,
+            'path': request_path,
+            'method': request_method,
+            'user_agent_hash': hashlib.sha256(user_agent.encode()).hexdigest()[:16]
+        })
         
         # Check rate limiting first
         if not self._check_rate_limit(client_ip):
@@ -145,12 +154,12 @@ class SafaricomIPWhitelist(BasePermission):
         is_authorized = self._is_authorized_ip(client_ip)
         
         if is_authorized:
-            self.log_security_event('CALLBACK_AUTHORIZED', security_context)
+            security_logger.info("M-Pesa callback authorized", extra={'client_ip_hash': hashlib.sha256(client_ip.encode()).hexdigest()[:16]})
             # Track successful callbacks for monitoring
             self._track_successful_callback(client_ip)
             return True
         else:
-            self.log_security_event('UNAUTHORIZED_CALLBACK_ATTEMPT', security_context)
+            security_logger.warning("Unauthorized M-Pesa callback attempt", extra={'client_ip_hash': hashlib.sha256(client_ip.encode()).hexdigest()[:16]})
             # Track failed attempts for security monitoring
             self._track_failed_attempt(client_ip)
             return False
@@ -171,7 +180,7 @@ class SafaricomIPWhitelist(BasePermission):
         
         # In development mode, allow local IPs
         if getattr(settings, 'DEBUG', False) and client_ip in self.DEVELOPMENT_IPS:
-            logging.warning(f"Development mode: Allowing local IP {client_ip}")
+            security_logger.info("Development mode: Local IP authorized", extra={'mode': 'development'})
             return True
         
         # Check IP ranges (basic implementation)
@@ -218,7 +227,10 @@ class SafaricomIPWhitelist(BasePermission):
         window_minutes = 1
         
         if current_requests >= max_requests:
-            logging.warning(f"Rate limit exceeded for IP {client_ip}: {current_requests} requests")
+            security_logger.warning("Rate limit exceeded for callback requests", extra={
+                'requests_count': current_requests,
+                'max_allowed': max_requests
+            })
             return False
         
         # Increment counter with expiration
@@ -239,54 +251,44 @@ class SafaricomIPWhitelist(BasePermission):
         
         # Alert if too many failed attempts
         if current_count + 1 >= 10:
-            logging.critical(f"SECURITY ALERT: Multiple failed callback attempts from IP {client_ip}")
+            security_logger.critical("Multiple failed callback attempts detected", extra={
+                'attempt_count': current_count + 1,
+                'time_window': '1_hour'
+            })
     
     def log_security_event(self, event_type, context):
         """
-        Enhanced security event logging with safe JSON serialization.
+        Secure logging that doesn't expose sensitive information.
         
         Args:
             event_type (str): Type of security event
-            context (dict): Security context information
+            context (dict): Security context information (will be sanitized)
         """
         try:
-            # Create safe log entry with only serializable data
-            log_entry = {
+            # Create sanitized log entry
+            sanitized_context = {
                 'event_type': event_type,
                 'timestamp': datetime.now().isoformat(),
-                'ip': context.get('ip', 'Unknown'),
-                'user_agent': context.get('user_agent', 'Unknown'),
                 'method': context.get('method', 'Unknown'),
-                'path': context.get('path', 'Unknown')
+                'path': context.get('path', 'Unknown'),
+                'content_type': context.get('content_type', ''),
+                # Hash IP instead of logging it directly
+                'client_ip_hash': hashlib.sha256(context.get('ip', '').encode()).hexdigest()[:16] if context.get('ip') else None,
+                # Hash user agent to prevent fingerprinting
+                'user_agent_hash': hashlib.sha256(context.get('user_agent', '').encode()).hexdigest()[:16] if context.get('user_agent') else None,
             }
             
-            # Add additional context safely
-            for key, value in context.items():
-                if key not in log_entry and value is not None:
-                    try:
-                        # Test if value is JSON serializable
-                        json.dumps(value)
-                        log_entry[key] = value
-                    except (TypeError, ValueError):
-                        # Convert non-serializable values to string
-                        log_entry[key] = str(value)[:200]  # Limit length
-            
-            # Log based on event severity
-            if event_type == 'UNAUTHORIZED_CALLBACK_ATTEMPT':
-                logging.warning(f"SECURITY ALERT: Unauthorized M-Pesa callback from {context.get('ip')} - {event_type}")
-                logging.debug(f"Security details: {json.dumps(log_entry)}")
-            elif event_type == 'RATE_LIMIT_EXCEEDED':
-                logging.warning(f"RATE LIMIT: M-Pesa callback rate limit exceeded from {context.get('ip')}")
-                logging.debug(f"Rate limit details: {json.dumps(log_entry)}")
+            # Log based on event severity with structured logging
+            if event_type in ['UNAUTHORIZED_CALLBACK_ATTEMPT', 'RATE_LIMIT_EXCEEDED']:
+                security_logger.warning(f"Security event: {event_type}", extra=sanitized_context)
             elif event_type == 'CALLBACK_AUTHORIZED':
-                logging.info(f"M-Pesa callback authorized from {context.get('ip')}")
+                security_logger.info(f"Security event: {event_type}", extra={'event_type': event_type})
             else:
-                logging.info(f"M-Pesa security event: {event_type} from {context.get('ip')}")
+                security_logger.info(f"Security event: {event_type}", extra={'event_type': event_type})
                 
         except Exception as e:
-            # Fallback logging if JSON serialization still fails
-            logging.error(f"Security logging error for {event_type}: {str(e)}")
-            logging.warning(f"Security event {event_type} from IP {context.get('ip', 'Unknown')}")
+            # Fallback logging without exposing error details
+            security_logger.error("Security logging error occurred", extra={'event_type': event_type})
     
     def get_client_ip(self, request):
         """
@@ -436,13 +438,13 @@ class HMACSignatureValidator:
             
             # Compare signatures using secure comparison
             if self._secure_compare(provided_signature, expected_signature):
-                logging.info(f"HMAC signature validation successful")
+                security_logger.info("HMAC signature validation successful")
                 return {
                     'valid': True,
                     'message': 'Signature validation successful'
                 }
             else:
-                logging.warning(f"HMAC signature validation failed")
+                security_logger.warning("HMAC signature validation failed")
                 return {
                     'valid': False,
                     'error': 'Signature mismatch',
@@ -450,11 +452,11 @@ class HMACSignatureValidator:
                 }
                 
         except Exception as e:
-            logging.error(f"HMAC signature validation error: {str(e)}")
+            security_logger.error("HMAC signature validation error occurred")
             return {
                 'valid': False,
                 'error': 'Validation error',
-                'details': str(e)
+                'details': 'Unable to validate signature'
             }
     
     def generate_signature(self, payload, timestamp=None):
@@ -514,7 +516,7 @@ class HMACSignatureValidator:
             return time_diff <= self.timestamp_tolerance
             
         except Exception as e:
-            logging.warning(f"Timestamp validation error: {str(e)}")
+            security_logger.warning("Timestamp validation error")
             return False
     
     def _extract_timestamp(self, request):
@@ -664,11 +666,11 @@ class CallbackStructureValidator:
             }
             
         except Exception as e:
-            logging.error(f"Structure validation error: {str(e)}")
+            security_logger.error("Structure validation error occurred")
             return {
                 'valid': False,
                 'error': 'Validation error',
-                'details': str(e)
+                'details': 'Unable to validate structure'
             }
     
     def _validate_required_fields(self, data, field_schema, path=''):
@@ -730,7 +732,7 @@ class CallbackStructureValidator:
             # Additional validations can be added here
             
         except Exception as e:
-            self.validation_errors.append(f"Business rule validation error: {str(e)}")
+            self.validation_errors.append("Business rule validation error occurred")
     
     def sanitize_data(self, callback_data):
         """
@@ -871,14 +873,16 @@ class EnhancedCallbackSecurity:
             validation_results['message'] = 'All security validations passed'
             
             # Log successful validation
-            logging.info(f"Enhanced callback security: All validations passed for IP {security_context['client_ip']}")
+            security_logger.info("Enhanced callback security validation successful", extra={
+                'validations_passed': list(validation_results['validations'].keys())
+            })
             
             return validation_results
             
         except Exception as e:
-            logging.error(f"Enhanced callback security error: {str(e)}")
+            security_logger.error("Enhanced callback security validation error")
             validation_results['overall_status'] = 'error'
-            validation_results['error'] = str(e)
+            validation_results['error'] = 'Security validation failed'
             return validation_results
     
     def get_security_context(self, request):

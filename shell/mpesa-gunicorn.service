@@ -11,7 +11,7 @@ Environment="PATH=/home/devops/MPESA/mpesa/venv/bin"
 Environment="DEBUG=False"
 Environment="CLOUDFLARE_TUNNEL=True"
 Environment="DJANGO_SETTINGS_MODULE=config.settings"
-ExecStart=/home/devops/MPESA/mpesa/venv/bin/gunicorn --config gunicorn.conf.py config.wsgi:application
+ExecStart=/home/devops/MPESA/mpesa/venv/bin/gunicorn --config shell/gunicorn.conf.py config.wsgi:application
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=5

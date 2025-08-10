@@ -396,8 +396,41 @@ class MpesaGateWay:
         Returns:
             Transaction: Updated transaction object
         """
+        # Log the full callback data structure for debugging
+        logging.info("Processing successful payment callback")
+        logging.info("Callback data structure: {}".format(str(data)[:500]))  # Truncate to avoid log spam
+        
         # Extract callback metadata containing payment details
-        items = data["Body"]["stkCallback"]["CallbackMetadata"]["Item"]
+        try:
+            items = data["Body"]["stkCallback"]["CallbackMetadata"]["Item"]
+            logging.info("Found {} callback items to process".format(len(items)))
+        except KeyError as e:
+            logging.error("Missing callback metadata structure: {}".format(e))
+            
+            # If callback metadata is missing, try to query M-Pesa for transaction details
+            logging.info("Attempting to query M-Pesa for transaction details as fallback")
+            try:
+                query_result = self.stk_push_query(transaction.checkout_request_id)
+                
+                # If query successful and contains receipt info, use it
+                if (query_result and 
+                    isinstance(query_result, dict) and 
+                    query_result.get('ResultCode') == '0' and
+                    'local_transaction' in query_result and
+                    query_result['local_transaction'].get('receipt_no')):
+                    
+                    receipt_no = query_result['local_transaction']['receipt_no']
+                    transaction.receipt_no = receipt_no
+                    logging.info("Retrieved receipt number from query: {}".format(receipt_no))
+                else:
+                    logging.warning("Could not retrieve receipt number from query")
+                    
+            except Exception as query_error:
+                logging.error("Failed to query M-Pesa for transaction details: {}".format(query_error))
+            
+            # Mark as complete even without full callback data
+            transaction.status = "0"
+            return transaction
         
         # Initialize variables for payment details
         amount = None
@@ -407,26 +440,55 @@ class MpesaGateWay:
         
         # Parse callback items to extract payment information
         for item in items:
-            if item["Name"] == "Amount":
-                amount = item["Value"]
-            elif item["Name"] == "MpesaReceiptNumber":
-                receipt_no = item["Value"]  # M-Pesa transaction receipt
-            elif item["Name"] == "PhoneNumber":
-                phone_number = item["Value"]
-            elif item["Name"] == "TransactionDate":
-                transaction_date = item["Value"]
+            item_name = item.get("Name", "Unknown")
+            item_value = item.get("Value", "None")
+            logging.info("Processing callback item: {} = {}".format(item_name, item_value))
+            
+            if item_name == "Amount":
+                amount = item_value
+            elif item_name == "MpesaReceiptNumber":
+                receipt_no = item_value  # M-Pesa transaction receipt
+                logging.info("Found receipt number: {}".format(receipt_no))
+            elif item_name == "PhoneNumber":
+                phone_number = item_value
+            elif item_name == "TransactionDate":
+                transaction_date = item_value
 
         # Update transaction with callback data
         if amount:
             transaction.amount = str(amount)
+            logging.info("Updated amount: {}".format(amount))
         if phone_number:
             # Convert phone number to PhoneNumber object
             transaction.phone_number = PhoneNumber(raw_input=str(phone_number))
+            logging.info("Updated phone number: {}".format(phone_number))
         if receipt_no:
             transaction.receipt_no = receipt_no  # Store M-Pesa receipt number
+            logging.info("Updated receipt number: {}".format(receipt_no))
+        else:
+            logging.warning("No receipt number found in callback data for transaction {}".format(transaction.transaction_no))
+            
+            # Try to query M-Pesa as a fallback
+            logging.info("Attempting to retrieve receipt number via STK query")
+            try:
+                query_result = self.stk_push_query(transaction.checkout_request_id)
+                
+                if (query_result and 
+                    isinstance(query_result, dict) and 
+                    query_result.get('ResultCode') == '0' and
+                    'local_transaction' in query_result and
+                    query_result['local_transaction'].get('receipt_no')):
+                    
+                    receipt_no = query_result['local_transaction']['receipt_no']
+                    transaction.receipt_no = receipt_no
+                    logging.info("Successfully retrieved receipt number from query: {}".format(receipt_no))
+                    
+            except Exception as query_error:
+                logging.error("Failed to query receipt number: {}".format(query_error))
             
         # Mark transaction as complete
         transaction.status = "0"  # "0" = Complete status
+        logging.info("Transaction {} marked as complete".format(transaction.transaction_no))
         
         return transaction
 
@@ -443,14 +505,24 @@ class MpesaGateWay:
         Returns:
             Response: HTTP response to acknowledge callback receipt
         """
+        # Log callback receipt for debugging
+        logging.info("Received M-Pesa callback")
+        logging.info("Callback data keys: {}".format(list(data.keys())))
+        
         # Extract status from callback data
         status = self.check_status(data)
+        logging.info("Callback status determined: {}".format(status))
         
         # Get the associated transaction record
         transaction = self.get_transaction_object(data)
+        if transaction:
+            logging.info("Found transaction: {} for callback".format(transaction.transaction_no))
+        else:
+            logging.error("No transaction found for callback data")
         
         if status == "0":
             # Payment was successful - process confirmation
+            logging.info("Processing successful payment callback")
             self.handle_successful_pay(data, transaction)
             logging.info("Payment successful for CheckoutRequestID: {}".format(
                 data["Body"]["stkCallback"]["CheckoutRequestID"]
@@ -458,6 +530,8 @@ class MpesaGateWay:
         else:
             # Map different failure codes to appropriate statuses
             result_code = str(data.get("Body", {}).get("stkCallback", {}).get("ResultCode", "1"))
+            logging.info("Processing failed payment with ResultCode: {}".format(result_code))
+            
             if result_code == "1032":  # User cancelled
                 transaction.status = "3"  # Cancelled
             elif result_code == "1037":  # Timeout
@@ -473,6 +547,7 @@ class MpesaGateWay:
 
         # Save the updated transaction to database
         transaction.save()
+        logging.info("Transaction {} saved to database".format(transaction.transaction_no))
 
         # Serialize transaction data for logging
         transaction_data = TransactionSerializer(transaction).data
